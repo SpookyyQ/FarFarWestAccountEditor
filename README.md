@@ -64,13 +64,18 @@ The write itself goes through a temporary file and then replaces the original sa
 
 ### Fragments
 
-Adding fragments via the editor should theoretically be possible since they follow the same inventory structure as other items. The raw key format has been confirmed for at least one entry:
+Adding fragments via the editor should theoretically be possible since they follow the same inventory structure as other items. The raw key format has been confirmed for one entry, and the remaining keys are derived from the same `item<Name>Fragment` pattern:
 
-| Item | Raw key |
-|------|---------|
-| Utility Heal Bottle Fragment | `itemUtilityHealBottleFragment` |
+| Item | Raw key | Status |
+|------|---------|--------|
+| Utility Heal Bottle Fragment | `itemUtilityHealBottleFragment` | confirmed |
+| Utility Ammo Fragment | `itemUtilityAmmoFragment` | inferred |
+| Utility Bottle Crate Fragment | `itemUtilityBottleCrateFragment` | inferred |
+| Utility Impulse Fragment | `itemUtilityImpulseFragment` | inferred |
 
-The pattern `item<Name>Fragment` should transfer to other fragments as well. The editor does not currently add fragment items automatically — but if a fragment already exists in your save, you can edit its amount directly in the Inventory tab.
+Weapon and spell fragments may exist but their keys are currently unknown — the game's pak files are encrypted and fragment items only appear in a save once the player has picked one up in-game.
+
+The editor does not add fragment items automatically. However, if a fragment already exists in your save, you can edit its amount directly from the Inventory tab.
 
 ## Disclaimer
 
