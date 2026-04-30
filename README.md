@@ -12,6 +12,12 @@ build.bat
 
 The output exe is written to `build\FarFarWest Unlock all tool.exe`.
 
+To create a ready-to-share release folder and zip, run:
+
+```bat
+package_release.bat
+```
+
 ## Current Features
 
 - Native Win32 desktop UI with a dark purple liquid-glass inspired look
@@ -29,3 +35,7 @@ No Python installation is required for end users. The current release format is 
 - `FarFarWest Unlock all tool.exe`
 - `libc++.dll`
 - `libunwind.dll`
+- `libwinpthread-1.dll`
+- `libc++.whl`
+- `libunwind.whl`
+- `README.txt`
