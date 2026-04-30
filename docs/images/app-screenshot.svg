@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1416" height="932" viewBox="0 0 1416 932" role="img" aria-labelledby="title desc">
+  <title id="title">FarFarWest Unlock all tool UI preview</title>
+  <desc id="desc">Stylized preview of the FarFarWest save editor interface with navigation, quick actions, field browser, and editor panel.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#11131d" />
+      <stop offset="100%" stop-color="#1d1a2d" />
+    </linearGradient>
+    <radialGradient id="glowTop" cx="1" cy="0" r="0.65">
+      <stop offset="0%" stop-color="#5c47d6" stop-opacity="0.42" />
+      <stop offset="100%" stop-color="#5c47d6" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowBottom" cx="0" cy="1" r="0.6">
+      <stop offset="0%" stop-color="#2e78ff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#2e78ff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="panelFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#171a25" />
+      <stop offset="100%" stop-color="#141721" />
+    </linearGradient>
+    <linearGradient id="chipPrimary" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8d74ff" />
+      <stop offset="100%" stop-color="#6780ff" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.32" />
+    </filter>
+    <style>
+      text {
+        font-family: "Segoe UI", "Trebuchet MS", Arial, sans-serif;
+        fill: #f5f7ff;
+      }
+      .muted { fill: #a9afc4; }
+      .muted2 { fill: #848aa3; }
+      .accent { fill: #af97ff; }
+      .label {
+        font-size: 11px;
+        letter-spacing: 2.6px;
+        text-transform: uppercase;
+      }
+      .title {
+        font-size: 19px;
+        font-weight: 700;
+      }
+      .body {
+        font-size: 14px;
+      }
+      .buttonText {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .small {
+        font-size: 12px;
+      }
+      .mono {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+      }
+    </style>
+  </defs>
+
+  <rect width="1416" height="932" fill="url(#bg)" />
+  <rect width="1416" height="932" fill="url(#glowTop)" />
+  <rect width="1416" height="932" fill="url(#glowBottom)" />
+
+  <g filter="url(#shadow)">
+    <rect x="6" y="12" width="1398" height="170" rx="24" fill="url(#panelFill)" stroke="rgba(255,255,255,0.10)" />
+    <rect x="6" y="195" width="238" height="726" rx="24" fill="url(#panelFill)" stroke="rgba(255,255,255,0.10)" />
+    <rect x="257" y="195" width="1147" height="118" rx="24" fill="url(#panelFill)" stroke="rgba(255,255,255,0.10)" />
+    <rect x="257" y="326" width="953" height="541" rx="24" fill="url(#panelFill)" stroke="rgba(255,255,255,0.10)" />
+    <rect x="1223" y="326" width="181" height="541" rx="24" fill="url(#panelFill)" stroke="rgba(255,255,255,0.10)" />
+    <rect x="257" y="881" width="1147" height="41" rx="20" fill="url(#panelFill)" stroke="rgba(255,255,255,0.08)" />
+  </g>
+
+  <g transform="translate(48 36) rotate(-10)">
+    <text x="0" y="40" font-size="58" font-weight="900">FAR FAR</text>
+    <text x="26" y="96" font-size="58" font-weight="900">WEST</text>
+  </g>
+
+  <rect x="1242" y="77" width="144" height="40" rx="20" fill="#2d2458" stroke="#6b59bf" />
+  <text x="1314" y="102" text-anchor="middle" class="buttonText accent">No save loaded</text>
+
+  <text x="22" y="223" class="label muted">Navigation</text>
+  <rect x="22" y="237" width="196" height="40" rx="14" fill="#211d37" />
+  <rect x="22" y="237" width="2" height="40" fill="#8d74ff" />
+  <text x="52" y="263" class="buttonText accent">Overview</text>
+  <text x="52" y="305" class="buttonText muted2">Inventory</text>
+  <text x="52" y="347" class="buttonText muted2">Levels</text>
+  <text x="52" y="389" class="buttonText muted2">Upgrades</text>
+  <text x="52" y="431" class="buttonText muted2">Jokers</text>
+  <text x="52" y="473" class="buttonText muted2">Rewards</text>
+  <text x="52" y="515" class="buttonText muted2">Other</text>
+
+  <text x="22" y="711" class="label muted">Save Actions</text>
+  <text x="22" y="733" class="body muted">Open, import and write save</text>
+  <text x="22" y="753" class="body muted">files from here.</text>
+
+  <rect x="22" y="767" width="100" height="43" rx="13" fill="#1f2230" stroke="rgba(255,255,255,0.08)" />
+  <rect x="130" y="767" width="100" height="43" rx="13" fill="#1f2230" stroke="rgba(255,255,255,0.08)" />
+  <rect x="22" y="819" width="100" height="43" rx="13" fill="#1f2230" stroke="rgba(255,255,255,0.08)" />
+  <rect x="130" y="819" width="100" height="43" rx="13" fill="#1f2230" stroke="rgba(255,255,255,0.08)" />
+  <rect x="22" y="871" width="208" height="37" rx="13" fill="#1f2230" stroke="rgba(255,255,255,0.08)" />
+  <text x="72" y="794" text-anchor="middle" class="buttonText">Open Save</text>
+  <text x="180" y="785" text-anchor="middle" class="buttonText">Auto</text>
+  <text x="180" y="803" text-anchor="middle" class="buttonText">Import</text>
+  <text x="72" y="837" text-anchor="middle" class="buttonText">Save</text>
+  <text x="72" y="855" text-anchor="middle" class="buttonText">Folder</text>
+  <text x="180" y="846" text-anchor="middle" class="buttonText">Save</text>
+  <text x="126" y="896" text-anchor="middle" class="buttonText">Save As</text>
+
+  <text x="274" y="223" class="label muted">Quick Actions</text>
+  <text x="274" y="248" class="title">Unlock And Progress Actions</text>
+
+  <rect x="274" y="260" width="118" height="37" rx="18" fill="#262938" stroke="rgba(255,255,255,0.08)" />
+  <rect x="400" y="260" width="98" height="37" rx="18" fill="#262938" stroke="rgba(255,255,255,0.08)" />
+  <rect x="506" y="260" width="100" height="37" rx="18" fill="#262938" stroke="rgba(255,255,255,0.08)" />
+  <rect x="614" y="260" width="121" height="37" rx="18" fill="#262938" stroke="rgba(255,255,255,0.08)" />
+  <rect x="743" y="260" width="146" height="37" rx="18" fill="url(#chipPrimary)" />
+  <text x="333" y="284" text-anchor="middle" class="buttonText">Weapons 100</text>
+  <text x="449" y="284" text-anchor="middle" class="buttonText">Spells 100</text>
+  <text x="556" y="284" text-anchor="middle" class="buttonText">Prestige 10</text>
+  <text x="675" y="284" text-anchor="middle" class="buttonText">Add Weapons</text>
+  <text x="816" y="284" text-anchor="middle" class="buttonText">Unlock Everything</text>
+
+  <text x="274" y="354" class="label muted">Field Browser</text>
+  <text x="274" y="381" class="title">Overview</text>
+  <rect x="1100" y="340" width="93" height="40" rx="20" fill="#2d2458" stroke="#6b59bf" />
+  <text x="1146" y="366" text-anchor="middle" class="buttonText accent">0 shown</text>
+
+  <rect x="274" y="514" width="920" height="160" rx="16" fill="#232538" stroke="rgba(255,255,255,0.05)" />
+  <text x="287" y="540" class="body muted">Open a save or use auto import to begin.</text>
+
+  <rect x="274" y="687" width="920" height="43" rx="14" fill="#1f2230" stroke="rgba(255,255,255,0.06)" />
+  <text x="288" y="714" class="buttonText">No fields available</text>
+  <text x="1165" y="714" text-anchor="end" class="label muted">Load a save or switch tabs</text>
+
+  <text x="1240" y="354" class="label muted">Field</text>
+  <text x="1240" y="372" class="label muted">Details</text>
+  <text x="1240" y="392" class="title">No field</text>
+  <text x="1240" y="417" class="title">selected</text>
+  <rect x="1287" y="340" width="99" height="40" rx="20" fill="#2d2458" stroke="#6b59bf" />
+  <text x="1337" y="366" text-anchor="middle" class="buttonText accent">Type</text>
+
+  <rect x="1240" y="431" width="147" height="178" rx="16" fill="#1a1d28" stroke="rgba(255,255,255,0.06)" />
+  <text x="1252" y="457" class="mono muted">Select a field</text>
+  <text x="1252" y="477" class="mono muted">from the</text>
+  <text x="1252" y="497" class="mono muted">current tab to</text>
+  <text x="1252" y="517" class="mono muted">inspect or edit</text>
+  <text x="1252" y="537" class="mono muted">it.</text>
+
+  <text x="1240" y="632" class="label muted">New Value</text>
+  <rect x="1240" y="646" width="147" height="35" rx="12" fill="#202332" stroke="rgba(255,255,255,0.06)" />
+  <text x="1253" y="668" class="body muted2">Enter the new value</text>
+  <rect x="1240" y="690" width="147" height="35" rx="12" fill="url(#chipPrimary)" />
+  <text x="1313" y="713" text-anchor="middle" class="buttonText">Apply Value</text>
+
+  <circle cx="279" cy="902" r="5" fill="#86d8a5" />
+  <text x="295" y="907" class="body muted">Open a save file or auto-import from FarFarWest.</text>
+</svg>
