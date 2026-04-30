@@ -1,105 +1,65 @@
-# FarFarWest Unlock Tool
+# FarFarWest Unlock all tool
 
-Portable Windows desktop app for opening, editing, and saving **FarFarWest** save files (`.save`).  
-You do **not** need Python or the command line: open a save, change values, save it again.
+Portable native Windows save editor for **FarFarWest**.
 
-![FarFarWest Unlock Tool Screenshot](docs/images/app-screenshot.svg)
+This project rewrites the earlier tool as a standalone desktop app built with Win32 and WebView2, so end users can open, inspect, edit, and save `.save` files without needing a Python installation.
 
-> Preview of the current desktop layout.
+![FarFarWest Unlock all tool screenshot](docs/images/app-screenshot.svg)
 
-## What the program does
+> UI preview based on the current desktop layout.
 
-This tool opens your FarFarWest save, decrypts it locally on your PC, shows the important values in an editable interface, and then saves the file back in the correct format.
+## Highlights
 
-With it, you can for example:
+- Native Windows `.exe` with a custom WebView2 UI
+- AES-256-CBC decrypt/encrypt pipeline for FarFarWest save files
+- GVAS parse and serialize support for the property types used by current saves
+- Auto import from `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
+- Timestamped backup creation before overwriting an existing save
+- Save and Save As support
+- Quick actions for common progression edits
+- Dedicated tabs for `Overview`, `Inventory`, `Levels`, `Upgrades`, `Jokers`, `Rewards`, and `Other`
 
-- load saves directly from the default save folder
-- edit values such as inventory, levels, and upgrades
-- inspect and change joker and reward entries
-- apply several progression changes with one click
-- save the edited result back as a `.save` file
+## What You Can Do
 
-## Features
+The editor is focused on the fields that matter most during normal save editing:
 
-- Portable Windows `.exe`
-- Automatic import of the newest save from `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
-- `Open Save`, `Save`, and `Save As`
-- Automatic backup before overwriting an existing file
-- Direct editing of individual values in the interface
-- Clean tab-based layout instead of raw data or a hex view
-- Quick actions for common progression changes
+- Browse the loaded save by category instead of digging through raw binary data
+- Change scalar values directly from the right-hand editor panel
+- Auto-load the latest save from the default FarFarWest save folder
+- Apply the built-in one-click actions for `Weapons 100`, `Spells 100`, `Prestige 10`, and `Unlock Everything`
 
-## Quick actions
+## Quick Start
 
-The top area of the app includes built-in actions for common edits:
+### For players
 
-- `Weapons 100`: sets weapon levels to 100
-- `Spells 100`: sets spell levels to 100
-- `Prestige 10`: sets weapon prestige to 10
-- `Add Weapons`: adds missing buildable weapons to the inventory
-- `Unlock Everything`: combines several progression edits, including weapons, prestige, hero level, and currencies
-
-## Interface
-
-The app is split into three clear areas:
-
-### Left side
-
-- navigation tabs: `Overview`, `Inventory`, `Levels`, `Upgrades`, `Jokers`, `Rewards`, and `Other`
-- file actions such as `Open Save`, `Auto Import`, `Save Folder`, `Save`, and `Save As`
-
-### Center
-
-- list of fields from the currently selected tab
-- quick overview of the visible values
-- depending on the tab, for example inventory entries, levels, upgrades, or rewards
-
-### Right side
-
-- detail view for the selected field
-- current value and field type
-- input field for a new value
-- `Apply Value` to update the loaded save in memory first
-
-Important: `Apply Value` changes the loaded save inside the app.  
-Only `Save` or `Save As` writes the file to disk.
-
-## What you can edit in each tab
-
-- `Overview`: general important profile values
-- `Inventory`: items and amounts
-- `Levels`: progression and item levels
-- `Upgrades`: upgrade values for specific weapons or entries
-- `Jokers`: joker-related values and lists
-- `Rewards`: saved reward entries
-- `Other`: additional editable fields that do not fit the other categories
-
-## Quick start
-
-1. Download and extract the release.
-2. Keep all included files together in the same folder.
+1. Download the packaged release.
+2. Keep all shipped files in the same folder.
 3. Start `FarFarWest Unlock all tool.exe`.
-4. Click `Auto Import` to load the newest save automatically.
-5. Or use `Open Save` to choose a specific `.save` file.
-6. Select a value, edit it on the right side, and click `Apply Value`.
-7. Use `Save` to overwrite the current file or `Save As` to create a copy.
+4. Click `Auto Import` to load the newest save automatically, or use `Open Save`.
+5. Make your edits.
+6. Click `Save` to overwrite the current file, or `Save As` to write a copy.
 
 Default save folder:
 
 `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
 
-## Save safety
+### Save safety
 
-When you overwrite an existing file, the tool first creates an automatic timestamped backup:
+When you overwrite an existing file, the app first creates a timestamped backup with this pattern:
 
 `<save-name>.backup_cpp_YYYYMMDD_HHMMSS.save`
 
-It then writes through a temporary file and replaces the original only at the end. This reduces the risk of leaving behind a broken or half-written save.
+The write itself goes through a temporary file and then replaces the original save, which reduces the chance of leaving a half-written file behind.
+
+
 
 ## Notes
 
-- Windows only
-- The app works locally on your PC
-- The included files next to the `.exe` must stay together
-- If `Auto Import` does not find a save, use `Save Folder` or `Open Save`
-- After game updates, the save format may change and some fields may need tool updates
+- This is a Windows-only desktop application.
+- The editor targets the property types currently used by FarFarWest saves. Future game updates may require parser changes.
+- The packaged release is portable, but the runtime DLLs and `ui` folder must stay next to the executable.
+- If auto import does not find a save, use `Save Folder` or `Open Save`.
+
+## Disclaimer
+
+Use the tool on copies or let the built-in backup system keep a recovery point. Editing save data always carries some risk, especially after game updates that change the file format.
