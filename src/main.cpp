@@ -26,6 +26,7 @@
 namespace ffw {
 
 using ByteVec = std::vector<unsigned char>;
+static const UINT WM_APP_LOAD_SAVE = WM_APP + 1;
 
 static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"FarFarWest Unlock Tool";
@@ -1317,7 +1318,13 @@ enum ControlId {
     IDC_BTN_PRESTIGE_10,
     IDC_BTN_ADD_BUILDABLE,
     IDC_BTN_UNLOCK_ALL,
-    IDC_TAB_EDITOR,
+    IDC_TAB_OVERVIEW,
+    IDC_TAB_INVENTORY,
+    IDC_TAB_LEVELS,
+    IDC_TAB_UPGRADES,
+    IDC_TAB_JOKERS,
+    IDC_TAB_REWARDS,
+    IDC_TAB_OTHER,
     IDC_EDIT_SEARCH,
     IDC_LIST_ROWS,
     IDC_EDIT_DETAIL,
@@ -1476,7 +1483,7 @@ private:
     HWND btnPrestige10_ = NULL;
     HWND btnAddBuildable_ = NULL;
     HWND btnUnlockAll_ = NULL;
-    HWND tabControl_ = NULL;
+    HWND tabButtons_[7] = {};
     HWND searchEdit_ = NULL;
     HWND rowList_ = NULL;
     HWND detailEdit_ = NULL;
@@ -1491,6 +1498,7 @@ private:
     std::vector<UiRow> rows_;
     std::vector<int> filteredRows_;
     std::wstring searchText_;
+    std::optional<std::wstring> pendingLoadPath_;
 
     static LRESULT CALLBACK WindowProcSetup(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (msg == WM_NCCREATE) {
@@ -1542,8 +1550,13 @@ private:
         btnAddBuildable_ = CreateButton(L"Add Missing Weapons", IDC_BTN_ADD_BUILDABLE);
         btnUnlockAll_ = CreateButton(L"Unlock All", IDC_BTN_UNLOCK_ALL);
 
-        tabControl_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_OWNERDRAWFIXED,
-                                      0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_TAB_EDITOR), hInstance_, NULL);
+        tabButtons_[0] = CreateButton(L"Overview", IDC_TAB_OVERVIEW);
+        tabButtons_[1] = CreateButton(L"Inventory", IDC_TAB_INVENTORY);
+        tabButtons_[2] = CreateButton(L"Levels", IDC_TAB_LEVELS);
+        tabButtons_[3] = CreateButton(L"Upgrades", IDC_TAB_UPGRADES);
+        tabButtons_[4] = CreateButton(L"Jokers", IDC_TAB_JOKERS);
+        tabButtons_[5] = CreateButton(L"Rewards", IDC_TAB_REWARDS);
+        tabButtons_[6] = CreateButton(L"Other", IDC_TAB_OTHER);
         searchEdit_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                                       0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_EDIT_SEARCH), hInstance_, NULL);
         rowList_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"", WS_CHILD | WS_VISIBLE | LBS_NOTIFY | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
@@ -1560,21 +1573,11 @@ private:
         statusLabel_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | WS_VISIBLE,
                                        0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_STATIC_STATUS), hInstance_, NULL);
 
-        const wchar_t* tabs[] = {
-            L"Overview", L"Inventory", L"Levels & Stats", L"Item Upgrades",
-            L"Jokers", L"Rewards", L"Other Fields"
-        };
-        for (int i = 0; i < 7; ++i) {
-            TCITEMW item = {};
-            item.mask = TCIF_TEXT;
-            item.pszText = const_cast<wchar_t*>(tabs[i]);
-            TabCtrl_InsertItem(tabControl_, i, &item);
-        }
-
         HWND controls[] = {
             btnOpen_, btnAutoImport_, btnOpenFolder_, btnSave_, btnSaveAs_,
             btnWeapon100_, btnSpell100_, btnPrestige10_, btnAddBuildable_, btnUnlockAll_,
-            tabControl_, searchEdit_, rowList_, detailEdit_, valueEdit_,
+            tabButtons_[0], tabButtons_[1], tabButtons_[2], tabButtons_[3], tabButtons_[4], tabButtons_[5], tabButtons_[6],
+            searchEdit_, rowList_, detailEdit_, valueEdit_,
             applyButton_, selectedStatic_, typeStatic_, statusLabel_
         };
         for (HWND control : controls) {
@@ -1613,9 +1616,12 @@ private:
         SetRect(&headerRect_, margin, topY - 14, width - margin, topY + buttonHeight * 2 + rowGap + 8);
         SetRect(&contentRect_, margin, contentTop + tabHeight - 2, width - margin, contentBottom);
 
-        MoveWindow(tabControl_, margin, contentTop, width - margin * 2, tabHeight, TRUE);
-        int tabItemWidth = std::max(120, (width - margin * 2 - 10) / 7);
-        SendMessageW(tabControl_, TCM_SETITEMSIZE, 0, MAKELPARAM(tabItemWidth, tabHeight - 6));
+        int tabGap = 8;
+        int tabWidth = ((width - margin * 2) - tabGap * 6) / 7;
+        for (int i = 0; i < 7; ++i) {
+            int tabX = margin + i * (tabWidth + tabGap);
+            MoveWindow(tabButtons_[i], tabX, contentTop, tabWidth, tabHeight, TRUE);
+        }
 
         int bodyPadding = 14;
         int bodyTop = contentRect_.top + bodyPadding;
@@ -1639,6 +1645,14 @@ private:
 
     bool IsPrimaryButton(int id) const {
         return id == IDC_BTN_AUTO_IMPORT || id == IDC_BTN_UNLOCK_ALL || id == IDC_BTN_APPLY;
+    }
+
+    bool IsTabButton(int id) const {
+        return id >= IDC_TAB_OVERVIEW && id <= IDC_TAB_OTHER;
+    }
+
+    int TabIndexFromId(int id) const {
+        return id - IDC_TAB_OVERVIEW;
     }
 
     COLORREF ControlBackdropForRect(const RECT& rect) const {
@@ -1668,24 +1682,21 @@ private:
         bool selected = (dis->itemState & ODS_SELECTED) != 0;
         bool disabled = (dis->itemState & ODS_DISABLED) != 0;
 
-        if (id == IDC_TAB_EDITOR) {
+        if (IsTabButton(id)) {
             HBRUSH backdrop = CreateSolidBrush(ControlBackdropForRect(rect));
             FillRect(hdc, &rect, backdrop);
             DeleteObject(backdrop);
 
-            wchar_t text[128] = {};
-            TCITEMW item = {};
-            item.mask = TCIF_TEXT;
-            item.pszText = text;
-            item.cchTextMax = 127;
-            TabCtrl_GetItem(tabControl_, static_cast<int>(dis->itemID), &item);
-
-            COLORREF fill = selected ? RGB(58, 60, 68) : RGB(34, 34, 40);
-            COLORREF border = selected ? gColors.accentBright : RGB(62, 62, 72);
+            bool active = currentTab_ == TabIndexFromId(id);
+            COLORREF fill = active ? RGB(58, 60, 68) : RGB(34, 34, 40);
+            COLORREF border = active ? gColors.accentBright : RGB(62, 62, 72);
+            if (selected) fill = RGB(68, 70, 78);
             DrawRoundedPanel(hdc, rect, fill, border, 16);
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, selected ? gColors.text : RGB(200, 202, 208));
+            SetTextColor(hdc, active ? gColors.text : RGB(210, 212, 218));
             InflateRect(&rect, -8, 0);
+            wchar_t text[128] = {};
+            GetWindowTextW(dis->hwndItem, text, 127);
             DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             return TRUE;
         }
@@ -2057,8 +2068,6 @@ private:
     }
 
     void RefreshViews() {
-        currentTab_ = TabCtrl_GetCurSel(tabControl_);
-        if (currentTab_ < 0) currentTab_ = TAB_OVERVIEW;
         wchar_t buffer[512];
         GetWindowTextW(searchEdit_, buffer, 512);
         searchText_ = buffer;
@@ -2075,7 +2084,6 @@ private:
             state_.savePath = path;
             state_.loaded = true;
             state_.status = L"Loaded " + path;
-            currentTab_ = TabCtrl_GetCurSel(tabControl_);
             SetWindowTextW(searchEdit_, L"");
             RefreshViews();
             return true;
@@ -2177,7 +2185,10 @@ private:
         switch (id) {
         case IDC_BTN_OPEN: {
             std::optional<std::wstring> path = PickOpenPath();
-            if (path.has_value()) LoadSaveFile(path.value());
+            if (path.has_value()) {
+                pendingLoadPath_ = path.value();
+                PostMessageW(hwnd_, WM_APP_LOAD_SAVE, 0, 0);
+            }
             break;
         }
         case IDC_BTN_AUTO_IMPORT: {
@@ -2187,7 +2198,8 @@ private:
                 MessageBoxW(hwnd_, message.c_str(), L"Save not found", MB_ICONINFORMATION);
                 break;
             }
-            LoadSaveFile(path.value());
+            pendingLoadPath_ = path.value();
+            PostMessageW(hwnd_, WM_APP_LOAD_SAVE, 0, 0);
             break;
         }
         case IDC_BTN_OPEN_FOLDER:
@@ -2224,6 +2236,11 @@ private:
             ApplyCurrentEdit();
             break;
         default:
+            if (IsTabButton(id)) {
+                currentTab_ = TabIndexFromId(id);
+                for (HWND tab : tabButtons_) InvalidateRect(tab, NULL, TRUE);
+                RefreshViews();
+            }
             break;
         }
     }
@@ -2276,6 +2293,13 @@ private:
         case WM_SIZE:
             LayoutControls(LOWORD(lParam), HIWORD(lParam));
             return 0;
+        case WM_APP_LOAD_SAVE:
+            if (pendingLoadPath_.has_value()) {
+                std::wstring path = pendingLoadPath_.value();
+                pendingLoadPath_.reset();
+                LoadSaveFile(path);
+            }
+            return 0;
         case WM_COMMAND:
             if (LOWORD(wParam) == IDC_LIST_ROWS && HIWORD(wParam) == LBN_SELCHANGE) {
                 UpdateSelectionDetails();
@@ -2287,13 +2311,6 @@ private:
             }
             if (HIWORD(wParam) == BN_CLICKED) {
                 HandleCommand(LOWORD(wParam));
-            }
-            return 0;
-        case WM_NOTIFY:
-            if (reinterpret_cast<LPNMHDR>(lParam)->hwndFrom == tabControl_ &&
-                reinterpret_cast<LPNMHDR>(lParam)->code == TCN_SELCHANGE) {
-                RefreshViews();
-                return 0;
             }
             return 0;
         case WM_DRAWITEM:
