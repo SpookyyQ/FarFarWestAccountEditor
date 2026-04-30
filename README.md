@@ -2,21 +2,7 @@
 
 Native Windows rewrite of the FarFarWest save editor as a portable desktop `.exe`.
 
-## Build
 
-Run:
-
-```bat
-build.bat
-```
-
-The output exe is written to `build\FarFarWest Unlock all tool.exe`.
-
-To create a ready-to-share release folder and zip, run:
-
-```bat
-package_release.bat
-```
 
 ## Current Features
 
