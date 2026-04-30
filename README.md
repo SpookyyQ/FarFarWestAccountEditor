@@ -60,6 +60,18 @@ The write itself goes through a temporary file and then replaces the original sa
 - The packaged release is portable, but the runtime DLLs and `ui` folder must stay next to the executable.
 - If auto import does not find a save, use `Save Folder` or `Open Save`.
 
+## Known Limitations & Research Notes
+
+### Fragments
+
+Adding fragments via the editor should theoretically be possible since they follow the same inventory structure as other items. The raw key format has been confirmed for at least one entry:
+
+| Item | Raw key |
+|------|---------|
+| Utility Heal Bottle Fragment | `itemUtilityHealBottleFragment` |
+
+The pattern `item<Name>Fragment` should transfer to other fragments as well. The editor does not currently add fragment items automatically — but if a fragment already exists in your save, you can edit its amount directly in the Inventory tab.
+
 ## Disclaimer
 
 Use the tool on copies or let the built-in backup system keep a recovery point. Editing save data always carries some risk, especially after game updates that change the file format.
