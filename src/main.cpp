@@ -28,7 +28,7 @@ namespace ffw {
 using ByteVec = std::vector<unsigned char>;
 
 static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
-static const wchar_t* kWindowTitle = L"FarFarWest Unlock all tool";
+static const wchar_t* kWindowTitle = L"FarFarWest Unlock Tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
 
@@ -61,16 +61,20 @@ static const wchar_t* kUtilityItems[] = {
 };
 
 struct ColorPalette {
-    COLORREF bgTop = RGB(10, 7, 20);
-    COLORREF bgBottom = RGB(28, 8, 48);
-    COLORREF panel = RGB(22, 20, 38);
-    COLORREF panelAlt = RGB(28, 24, 48);
-    COLORREF border = RGB(88, 64, 140);
-    COLORREF accent = RGB(168, 92, 255);
-    COLORREF accentSoft = RGB(108, 66, 168);
-    COLORREF text = RGB(245, 240, 255);
-    COLORREF textMuted = RGB(188, 176, 216);
-    COLORREF success = RGB(96, 214, 168);
+    COLORREF bgTop = RGB(18, 18, 20);
+    COLORREF bgBottom = RGB(28, 28, 32);
+    COLORREF panel = RGB(30, 30, 34);
+    COLORREF panelAlt = RGB(24, 24, 28);
+    COLORREF panelGlass = RGB(38, 38, 44);
+    COLORREF panelEdge = RGB(72, 72, 82);
+    COLORREF border = RGB(86, 86, 96);
+    COLORREF accent = RGB(152, 156, 166);
+    COLORREF accentSoft = RGB(102, 106, 116);
+    COLORREF accentDeep = RGB(64, 68, 76);
+    COLORREF accentBright = RGB(208, 212, 220);
+    COLORREF text = RGB(242, 242, 246);
+    COLORREF textMuted = RGB(176, 178, 184);
+    COLORREF success = RGB(138, 182, 152);
 };
 
 static ColorPalette gColors;
@@ -1459,6 +1463,8 @@ private:
     HFONT subtitleFont_ = NULL;
     HBRUSH panelBrush_ = NULL;
     HBRUSH panelAltBrush_ = NULL;
+    RECT contentRect_ = {};
+    RECT headerRect_ = {};
 
     HWND btnOpen_ = NULL;
     HWND btnAutoImport_ = NULL;
@@ -1510,15 +1516,15 @@ private:
 
     void CreateControls() {
         uiFont_ = CreateFontW(
-            -18, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+            -17, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         titleFont_ = CreateFontW(
-            -30, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            -28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         subtitleFont_ = CreateFontW(
-            -16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            -15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
@@ -1526,17 +1532,17 @@ private:
         panelAltBrush_ = CreateSolidBrush(gColors.panelAlt);
 
         btnOpen_ = CreateButton(L"Open", IDC_BTN_OPEN);
-        btnAutoImport_ = CreateButton(L"Auto Import Save", IDC_BTN_AUTO_IMPORT);
-        btnOpenFolder_ = CreateButton(L"Open Save Folder", IDC_BTN_OPEN_FOLDER);
+        btnAutoImport_ = CreateButton(L"Auto Import", IDC_BTN_AUTO_IMPORT);
+        btnOpenFolder_ = CreateButton(L"Save Folder", IDC_BTN_OPEN_FOLDER);
         btnSave_ = CreateButton(L"Save", IDC_BTN_SAVE);
         btnSaveAs_ = CreateButton(L"Save As", IDC_BTN_SAVE_AS);
-        btnWeapon100_ = CreateButton(L"Weapon Levels 100", IDC_BTN_WEAPON_100);
-        btnSpell100_ = CreateButton(L"Spell Levels 100", IDC_BTN_SPELL_100);
+        btnWeapon100_ = CreateButton(L"Weapons to 100", IDC_BTN_WEAPON_100);
+        btnSpell100_ = CreateButton(L"Spells to 100", IDC_BTN_SPELL_100);
         btnPrestige10_ = CreateButton(L"Weapon Prestige 10", IDC_BTN_PRESTIGE_10);
-        btnAddBuildable_ = CreateButton(L"Add Missing Buildable", IDC_BTN_ADD_BUILDABLE);
+        btnAddBuildable_ = CreateButton(L"Add Missing Weapons", IDC_BTN_ADD_BUILDABLE);
         btnUnlockAll_ = CreateButton(L"Unlock All", IDC_BTN_UNLOCK_ALL);
 
-        tabControl_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        tabControl_ = CreateWindowExW(0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | TCS_OWNERDRAWFIXED,
                                       0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_TAB_EDITOR), hInstance_, NULL);
         searchEdit_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                                       0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_EDIT_SEARCH), hInstance_, NULL);
@@ -1580,7 +1586,7 @@ private:
     }
 
     HWND CreateButton(const wchar_t* text, int id) {
-        return CreateWindowExW(0, L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        return CreateWindowExW(0, L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
                                0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(id), hInstance_, NULL);
     }
 
@@ -1588,38 +1594,126 @@ private:
         const int margin = 18;
         const int gap = 12;
         const int buttonHeight = 38;
-        const int topY = 96;
-        const int buttonWidths[] = { 96, 150, 150, 96, 108, 150, 138, 150, 176, 132 };
-        HWND buttons[] = { btnOpen_, btnAutoImport_, btnOpenFolder_, btnSave_, btnSaveAs_, btnWeapon100_, btnSpell100_, btnPrestige10_, btnAddBuildable_, btnUnlockAll_ };
-        int x = margin;
-        for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); ++i) {
-            MoveWindow(buttons[i], x, topY, buttonWidths[i], buttonHeight, TRUE);
-            x += buttonWidths[i] + gap;
+        const int topY = 118;
+        const int columns = 5;
+        const int availableWidth = width - margin * 2;
+        const int buttonWidth = (availableWidth - gap * (columns - 1)) / columns;
+        const int rowGap = 12;
+        HWND primaryButtons[] = { btnOpen_, btnAutoImport_, btnOpenFolder_, btnSave_, btnSaveAs_ };
+        HWND actionButtons[] = { btnWeapon100_, btnSpell100_, btnPrestige10_, btnAddBuildable_, btnUnlockAll_ };
+        for (int i = 0; i < columns; ++i) {
+            int x = margin + i * (buttonWidth + gap);
+            MoveWindow(primaryButtons[i], x, topY, buttonWidth, buttonHeight, TRUE);
+            MoveWindow(actionButtons[i], x, topY + buttonHeight + rowGap, buttonWidth, buttonHeight, TRUE);
         }
 
-        int contentTop = topY + buttonHeight + 20;
-        int contentHeight = height - contentTop - 88;
-        MoveWindow(tabControl_, margin, contentTop, width - margin * 2, contentHeight, TRUE);
+        int contentTop = topY + buttonHeight * 2 + rowGap + 22;
+        int contentBottom = height - 88;
+        int tabHeight = 34;
+        SetRect(&headerRect_, margin, topY - 14, width - margin, topY + buttonHeight * 2 + rowGap + 8);
+        SetRect(&contentRect_, margin, contentTop + tabHeight - 2, width - margin, contentBottom);
 
-        RECT tabRect;
-        GetClientRect(tabControl_, &tabRect);
-        TabCtrl_AdjustRect(tabControl_, FALSE, &tabRect);
+        MoveWindow(tabControl_, margin, contentTop, width - margin * 2, tabHeight, TRUE);
+        int tabItemWidth = std::max(120, (width - margin * 2 - 10) / 7);
+        SendMessageW(tabControl_, TCM_SETITEMSIZE, 0, MAKELPARAM(tabItemWidth, tabHeight - 6));
 
-        int leftWidth = (tabRect.right - tabRect.left) * 56 / 100;
-        int rightX = tabRect.left + leftWidth + gap;
-        int rightWidth = (tabRect.right - tabRect.left) - leftWidth - gap;
+        int bodyPadding = 14;
+        int bodyTop = contentRect_.top + bodyPadding;
+        int bodyBottom = contentRect_.bottom - bodyPadding;
+        int leftWidth = (contentRect_.right - contentRect_.left - bodyPadding * 2) * 56 / 100;
+        int rightX = contentRect_.left + bodyPadding + leftWidth + gap;
+        int rightWidth = (contentRect_.right - contentRect_.left) - leftWidth - gap - bodyPadding * 2;
         int searchHeight = 30;
 
-        MoveWindow(searchEdit_, tabRect.left, tabRect.top, leftWidth, searchHeight, TRUE);
-        MoveWindow(rowList_, tabRect.left, tabRect.top + searchHeight + 10, leftWidth,
-                   tabRect.bottom - tabRect.top - searchHeight - 10, TRUE);
+        MoveWindow(searchEdit_, contentRect_.left + bodyPadding, bodyTop, leftWidth, searchHeight, TRUE);
+        MoveWindow(rowList_, contentRect_.left + bodyPadding, bodyTop + searchHeight + 12, leftWidth,
+                   bodyBottom - bodyTop - searchHeight - 12, TRUE);
 
-        MoveWindow(selectedStatic_, rightX, tabRect.top, rightWidth, 24, TRUE);
-        MoveWindow(detailEdit_, rightX, tabRect.top + 30, rightWidth, 250, TRUE);
-        MoveWindow(typeStatic_, rightX, tabRect.top + 292, rightWidth, 24, TRUE);
-        MoveWindow(valueEdit_, rightX, tabRect.top + 322, rightWidth, 30, TRUE);
-        MoveWindow(applyButton_, rightX, tabRect.top + 364, rightWidth, 36, TRUE);
+        MoveWindow(selectedStatic_, rightX, bodyTop, rightWidth, 24, TRUE);
+        MoveWindow(detailEdit_, rightX, bodyTop + 30, rightWidth, 250, TRUE);
+        MoveWindow(typeStatic_, rightX, bodyTop + 292, rightWidth, 24, TRUE);
+        MoveWindow(valueEdit_, rightX, bodyTop + 322, rightWidth, 30, TRUE);
+        MoveWindow(applyButton_, rightX, bodyTop + 366, rightWidth, 38, TRUE);
         MoveWindow(statusLabel_, margin, height - 52, width - margin * 2, 28, TRUE);
+    }
+
+    bool IsPrimaryButton(int id) const {
+        return id == IDC_BTN_AUTO_IMPORT || id == IDC_BTN_UNLOCK_ALL || id == IDC_BTN_APPLY;
+    }
+
+    COLORREF ControlBackdropForRect(const RECT& rect) const {
+        POINT center = { (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2 };
+        if (PtInRect(&headerRect_, center)) return RGB(34, 34, 38);
+        if (PtInRect(&contentRect_, center)) return RGB(34, 34, 38);
+        return gColors.panel;
+    }
+
+    void DrawRoundedPanel(HDC hdc, const RECT& rect, COLORREF fill, COLORREF border, int radius) {
+        HBRUSH fillBrush = CreateSolidBrush(fill);
+        HPEN pen = CreatePen(PS_SOLID, 1, border);
+        HGDIOBJ oldBrush = SelectObject(hdc, fillBrush);
+        HGDIOBJ oldPen = SelectObject(hdc, pen);
+        RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+        SelectObject(hdc, oldBrush);
+        SelectObject(hdc, oldPen);
+        DeleteObject(fillBrush);
+        DeleteObject(pen);
+    }
+
+    LRESULT DrawControl(const DRAWITEMSTRUCT* dis) {
+        if (!dis) return FALSE;
+        UINT id = dis->CtlID;
+        HDC hdc = dis->hDC;
+        RECT rect = dis->rcItem;
+        bool selected = (dis->itemState & ODS_SELECTED) != 0;
+        bool disabled = (dis->itemState & ODS_DISABLED) != 0;
+
+        if (id == IDC_TAB_EDITOR) {
+            HBRUSH backdrop = CreateSolidBrush(ControlBackdropForRect(rect));
+            FillRect(hdc, &rect, backdrop);
+            DeleteObject(backdrop);
+
+            wchar_t text[128] = {};
+            TCITEMW item = {};
+            item.mask = TCIF_TEXT;
+            item.pszText = text;
+            item.cchTextMax = 127;
+            TabCtrl_GetItem(tabControl_, static_cast<int>(dis->itemID), &item);
+
+            COLORREF fill = selected ? RGB(58, 60, 68) : RGB(34, 34, 40);
+            COLORREF border = selected ? gColors.accentBright : RGB(62, 62, 72);
+            DrawRoundedPanel(hdc, rect, fill, border, 16);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, selected ? gColors.text : RGB(200, 202, 208));
+            InflateRect(&rect, -8, 0);
+            DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            return TRUE;
+        }
+
+        HBRUSH backdrop = CreateSolidBrush(ControlBackdropForRect(rect));
+        FillRect(hdc, &rect, backdrop);
+        DeleteObject(backdrop);
+
+        COLORREF fill = IsPrimaryButton(id) ? RGB(68, 72, 80) : RGB(42, 42, 48);
+        COLORREF border = IsPrimaryButton(id) ? RGB(168, 172, 180) : RGB(74, 74, 82);
+        if (selected) {
+            fill = IsPrimaryButton(id) ? RGB(88, 92, 100) : RGB(56, 56, 62);
+        }
+        if (disabled) {
+            fill = RGB(44, 40, 56);
+            border = RGB(70, 64, 88);
+        }
+
+        DrawRoundedPanel(hdc, rect, fill, border, 22);
+
+        wchar_t text[128] = {};
+        GetWindowTextW(dis->hwndItem, text, 127);
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, disabled ? gColors.textMuted : RGB(244, 244, 246));
+        SelectObject(hdc, uiFont_);
+        InflateRect(&rect, -8, 0);
+        DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        return TRUE;
     }
 
     std::vector<UiRow> BuildRows() {
@@ -2151,9 +2245,16 @@ private:
         TextOutW(hdc, 20, 18, kWindowTitle, lstrlenW(kWindowTitle));
         SelectObject(hdc, subtitleFont_);
         SetTextColor(hdc, gColors.textMuted);
-        const wchar_t* subtitle = L"Native C++ FarFarWest editor with full save sections, direct field editing, auto-import, and a dark liquid-glass inspired desktop UI.";
+        const wchar_t* subtitle = L"FarFarWest save editor with direct field editing, auto import, and quick bulk actions.";
         TextOutW(hdc, 22, 56, subtitle, lstrlenW(subtitle));
         SelectObject(hdc, old);
+
+        if (headerRect_.right > headerRect_.left) {
+            DrawRoundedPanel(hdc, headerRect_, RGB(34, 34, 38), RGB(66, 66, 74), 16);
+        }
+        if (contentRect_.right > contentRect_.left) {
+            DrawRoundedPanel(hdc, contentRect_, RGB(34, 34, 38), RGB(66, 66, 74), 16);
+        }
     }
 
     LRESULT HandleColorEdit(WPARAM wParam, LPARAM lParam) {
@@ -2195,6 +2296,8 @@ private:
                 return 0;
             }
             return 0;
+        case WM_DRAWITEM:
+            return DrawControl(reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
         case WM_CTLCOLORSTATIC:
         case WM_CTLCOLOREDIT:
         case WM_CTLCOLORLISTBOX:
