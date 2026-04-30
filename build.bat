@@ -17,8 +17,11 @@ set LIBWINPTHREAD=C:\Program Files\Windhawk\Compiler\x86_64-w64-mingw32\bin\libw
 
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 
+powershell -ExecutionPolicy Bypass -File "%ROOT%make_icon_res.ps1"
+if errorlevel 1 exit /b 1
+
 "%CLANG%" --target=x86_64-w64-windows-gnu -std=c++20 -O2 -municode -mwindows ^
-  -I"%WV2INC%" "%SRC%" "%WV2LIB%" -o "%EXE%" -lcomctl32 -lshell32 -lshlwapi -ldwmapi -lbcrypt -lole32 -loleaut32 -luuid -lmsimg32
+  -I"%WV2INC%" "%SRC%" "%WV2LIB%" "%OUTDIR%\app.res" -o "%EXE%" -lcomctl32 -lshell32 -lshlwapi -ldwmapi -lbcrypt -lole32 -loleaut32 -luuid -lmsimg32
 
 if errorlevel 1 exit /b 1
 
