@@ -1,31 +1,31 @@
 FarFarWest Unlock Tool
 
-Dieses Programm ist ein Windows-Save-Editor fuer FarFarWest.
-Du kannst damit `.save`-Dateien laden, Werte bearbeiten und wieder speichern.
+This program is a Windows save editor for FarFarWest.
+You can use it to open `.save` files, change values, and save them again.
 
-Was die App kann:
+What the app can do:
 
-- den neuesten Spielstand automatisch aus dem Standardordner laden
-- einzelne Werte in Tabs wie Overview, Inventory, Levels, Upgrades, Jokers und Rewards bearbeiten
-- Schnellaktionen wie `Weapons 100`, `Spells 100`, `Prestige 10`, `Add Weapons` und `Unlock Everything` ausfuehren
-- vor dem Ueberschreiben automatisch ein Backup der alten Datei erstellen
+- automatically load the newest save from the default save folder
+- edit values in tabs such as Overview, Inventory, Levels, Upgrades, Jokers, and Rewards
+- run quick actions such as `Weapons 100`, `Spells 100`, `Prestige 10`, `Add Weapons`, and `Unlock Everything`
+- automatically create a backup before overwriting an existing file
 
-So benutzt du die App:
+How to use it:
 
-1. Alle Dateien aus diesem Ordner zusammen lassen.
-2. `FarFarWest Unlock all tool.exe` starten.
-3. `Auto Import` klicken oder mit `Open Save` eine `.save`-Datei auswaehlen.
-4. Einen Wert auswaehlen, rechts aendern und `Apply Value` klicken.
-5. Mit `Save` speichern oder mit `Save As` eine Kopie anlegen.
+1. Keep all files from this folder together.
+2. Start `FarFarWest Unlock all tool.exe`.
+3. Click `Auto Import` or choose a `.save` file with `Open Save`.
+4. Select a value, change it on the right side, and click `Apply Value`.
+5. Use `Save` to write the file or `Save As` to create a copy.
 
-Wichtig:
+Important:
 
-- `Apply Value` aendert nur den geladenen Spielstand in der App.
-- Erst `Save` oder `Save As` schreibt die Datei auf die Festplatte.
-- Beim Ueberschreiben wird automatisch ein Backup mit Zeitstempel angelegt.
-- Keine Python-Installation noetig.
-- Alle mitgelieferten Dateien muessen neben der EXE bleiben.
+- `Apply Value` only changes the loaded save inside the app.
+- Only `Save` or `Save As` writes the file to disk.
+- When overwriting a file, the app creates an automatic timestamped backup.
+- No Python installation is required.
+- All included files must stay next to the EXE.
 
-Standardordner fuer Spielstaende:
+Default save folder:
 
 `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`

@@ -1,114 +1,114 @@
 # FarFarWest Unlock Tool
 
-Windows-Tool zum Laden, Bearbeiten und Speichern von **FarFarWest**-Spielständen (`.save`) als portable Desktop-App.  
-Du brauchst **kein Python** und keine Konsole: Datei öffnen, Werte anpassen, speichern.
+Portable Windows desktop app for opening, editing, and saving **FarFarWest** save files (`.save`).  
+You do **not** need Python or the command line: open a save, change values, save it again.
 
 ![FarFarWest Unlock Tool Screenshot](docs/images/app-screenshot.svg)
 
-> Die Vorschau zeigt das aktuelle Desktop-Layout der App.
+> Preview of the current desktop layout.
 
-## Was das Programm macht
+## What the program does
 
-Das Tool öffnet deinen FarFarWest-Spielstand, entschlüsselt ihn lokal auf deinem PC, zeigt die wichtigsten Werte in einer bearbeitbaren Oberfläche an und speichert den Spielstand danach wieder im richtigen Format zurück.
+This tool opens your FarFarWest save, decrypts it locally on your PC, shows the important values in an editable interface, and then saves the file back in the correct format.
 
-Damit kannst du zum Beispiel:
+With it, you can for example:
 
-- Spielstände direkt aus dem Standardordner laden
-- Werte wie Inventar, Level und Upgrades bearbeiten
-- Joker- und Reward-Einträge ansehen und anpassen
-- mehrere Fortschrittswerte per Schnellaktion sofort setzen
-- den bearbeiteten Spielstand wieder als `.save` speichern
+- load saves directly from the default save folder
+- edit values such as inventory, levels, and upgrades
+- inspect and change joker and reward entries
+- apply several progression changes with one click
+- save the edited result back as a `.save` file
 
 ## Features
 
-- Portable `.exe` für Windows
-- Automatischer Import des neuesten Spielstands aus `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
-- `Open Save`, `Save` und `Save As`
-- Automatische Sicherheitskopie vor dem Überschreiben einer vorhandenen Datei
-- Direkte Bearbeitung einzelner Werte in der Oberfläche
-- Aufgeräumte Tabs statt Rohdaten oder Hex-Ansicht
-- Schnellaktionen für häufige Änderungen
+- Portable Windows `.exe`
+- Automatic import of the newest save from `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
+- `Open Save`, `Save`, and `Save As`
+- Automatic backup before overwriting an existing file
+- Direct editing of individual values in the interface
+- Clean tab-based layout instead of raw data or a hex view
+- Quick actions for common progression changes
 
-## Schnellaktionen
+## Quick actions
 
-Im oberen Bereich der App gibt es fertige Aktionen für typische Änderungen:
+The top area of the app includes built-in actions for common edits:
 
-- `Weapons 100`: setzt Waffen-Level auf 100
-- `Spells 100`: setzt Zauber-Level auf 100
-- `Prestige 10`: setzt Waffen-Prestige auf 10
-- `Add Weapons`: fügt fehlende baubare Waffen zum Inventar hinzu
-- `Unlock Everything`: kombiniert mehrere Fortschritts-Änderungen, darunter Waffen, Prestige, Heldenlevel und Währungen
+- `Weapons 100`: sets weapon levels to 100
+- `Spells 100`: sets spell levels to 100
+- `Prestige 10`: sets weapon prestige to 10
+- `Add Weapons`: adds missing buildable weapons to the inventory
+- `Unlock Everything`: combines several progression edits, including weapons, prestige, hero level, and currencies
 
-## Oberfläche
+## Interface
 
-Die App ist in drei klare Bereiche aufgeteilt:
+The app is split into three clear areas:
 
-### Linke Seite
+### Left side
 
-- Navigation durch die Tabs `Overview`, `Inventory`, `Levels`, `Upgrades`, `Jokers`, `Rewards` und `Other`
-- Datei-Aktionen wie `Open Save`, `Auto Import`, `Save Folder`, `Save` und `Save As`
+- navigation tabs: `Overview`, `Inventory`, `Levels`, `Upgrades`, `Jokers`, `Rewards`, and `Other`
+- file actions such as `Open Save`, `Auto Import`, `Save Folder`, `Save`, and `Save As`
 
-### Mitte
+### Center
 
-- Liste der Felder aus dem aktuell geöffneten Tab
-- schneller Überblick über sichtbare Werte
-- je nach Tab z. B. Inventar-Einträge, Levelwerte, Upgrades oder Rewards
+- list of fields from the currently selected tab
+- quick overview of the visible values
+- depending on the tab, for example inventory entries, levels, upgrades, or rewards
 
-### Rechte Seite
+### Right side
 
-- Detailansicht des ausgewählten Felds
-- aktueller Wert und Feldtyp
-- Eingabefeld für den neuen Wert
-- `Apply Value`, um die Änderung zuerst im geladenen Spielstand zu übernehmen
+- detail view for the selected field
+- current value and field type
+- input field for a new value
+- `Apply Value` to update the loaded save in memory first
 
-Wichtig: `Apply Value` ändert den geladenen Spielstand in der App.  
-Erst mit `Save` oder `Save As` wird die Datei wirklich geschrieben.
+Important: `Apply Value` changes the loaded save inside the app.  
+Only `Save` or `Save As` writes the file to disk.
 
-## Was in den Tabs bearbeitet werden kann
+## What you can edit in each tab
 
-- `Overview`: allgemeine, wichtige Profilwerte
-- `Inventory`: Items und Mengen
-- `Levels`: Fortschritts- und Item-Level
-- `Upgrades`: Upgrade-Stufen einzelner Waffen oder Einträge
-- `Jokers`: Joker-bezogene Werte und Listen
-- `Rewards`: gespeicherte Reward-Einträge
-- `Other`: weitere editierbare Felder, die nicht in die anderen Bereiche fallen
+- `Overview`: general important profile values
+- `Inventory`: items and amounts
+- `Levels`: progression and item levels
+- `Upgrades`: upgrade values for specific weapons or entries
+- `Jokers`: joker-related values and lists
+- `Rewards`: saved reward entries
+- `Other`: additional editable fields that do not fit the other categories
 
-## Schnellstart
+## Quick start
 
-1. Release herunterladen und entpacken.
-2. Alle mitgelieferten Dateien zusammen im selben Ordner lassen.
-3. `FarFarWest Unlock all tool.exe` starten.
-4. Auf `Auto Import` klicken, um den neuesten Spielstand automatisch zu laden.
-5. Oder `Open Save` benutzen, um eine bestimmte `.save` auszuwählen.
-6. Wert auswählen, rechts anpassen und `Apply Value` klicken.
-7. Mit `Save` überschreiben oder mit `Save As` eine Kopie speichern.
+1. Download and extract the release.
+2. Keep all included files together in the same folder.
+3. Start `FarFarWest Unlock all tool.exe`.
+4. Click `Auto Import` to load the newest save automatically.
+5. Or use `Open Save` to choose a specific `.save` file.
+6. Select a value, edit it on the right side, and click `Apply Value`.
+7. Use `Save` to overwrite the current file or `Save As` to create a copy.
 
-Standardordner für Spielstände:
+Default save folder:
 
 `%LOCALAPPDATA%\FarFarWest\Saved\SaveGames`
 
-## Sicherheit beim Speichern
+## Save safety
 
-Wenn du eine bestehende Datei überschreibst, erstellt das Tool zuerst automatisch ein Backup mit Zeitstempel:
+When you overwrite an existing file, the tool first creates an automatic timestamped backup:
 
 `<save-name>.backup_cpp_YYYYMMDD_HHMMSS.save`
 
-Danach wird über eine temporäre Datei gespeichert und erst am Ende die Originaldatei ersetzt. Das reduziert das Risiko einer beschädigten Datei bei einem Abbruch während des Speicherns.
+It then writes through a temporary file and replaces the original only at the end. This reduces the risk of leaving behind a broken or half-written save.
 
-## Hinweise
+## Notes
 
-- Nur für Windows
-- Die App funktioniert lokal auf deinem PC
-- Die mitgelieferten Dateien neben der `.exe` dürfen nicht fehlen
-- Wenn `Auto Import` nichts findet, nutze `Save Folder` oder `Open Save`
-- Nach Spiel-Updates kann es sein, dass sich das Save-Format ändert und einzelne Felder angepasst werden müssen
+- Windows only
+- The app works locally on your PC
+- The included files next to the `.exe` must stay together
+- If `Auto Import` does not find a save, use `Save Folder` or `Open Save`
+- After game updates, the save format may change and some fields may need tool updates
 
-## Für Entwickler
+## For developers
 
-Der Quellcode liegt in diesem Repository und die App wird als native Win32-Anwendung mit WebView2 gebaut. Wer selbst bauen will, findet die Build-Skripte in [build.bat](build.bat) und [package_release.bat](package_release.bat).
+The source code is in this repository and the app is built as a native Win32 application with WebView2. If you want to build it yourself, see [build.bat](build.bat) and [package_release.bat](package_release.bat).
 
-Build-Ausgabe:
+Build output:
 
 - `build/FarFarWest Unlock all tool.exe`
 - `release/FarFarWest Unlock all tool.zip`
