@@ -51,79 +51,7 @@ When you overwrite an existing file, the app first creates a timestamped backup 
 
 The write itself goes through a temporary file and then replaces the original save, which reduces the chance of leaving a half-written file behind.
 
-## Build From Source
 
-### Requirements
-
-- Windows x64
-- `clang++` from the Windhawk compiler toolchain
-- Microsoft Edge WebView2 Runtime installed on the target machine
-
-The current `build.bat` is configured for this local compiler layout:
-
-- `C:\Program Files\Windhawk\Compiler\bin\clang++.exe`
-- `C:\Program Files\Windhawk\Compiler\x86_64-w64-mingw32\bin`
-
-If your toolchain is installed elsewhere, update the paths at the top of [build.bat](build.bat).
-
-### Build
-
-```bat
-build.bat
-```
-
-Build output is written to:
-
-- `build/FarFarWest Unlock all tool.exe`
-- `build/WebView2Loader.dll`
-- `build/libc++.dll`
-- `build/libunwind.dll`
-- `build/libwinpthread-1.dll`
-- `build/ui/...`
-
-### Package a release
-
-```bat
-package_release.bat
-```
-
-This creates:
-
-- `release/FarFarWest Unlock all tool/`
-- `release/FarFarWest Unlock all tool.zip`
-
-## Smoke Test
-
-The executable supports a simple round-trip smoke test for a specific save file:
-
-```bat
-build\FarFarWest Unlock all tool.exe --smoke-test "C:\path\to\your.save"
-```
-
-The smoke test verifies that the app can:
-
-1. derive the save key,
-2. decrypt the file,
-3. parse the GVAS payload,
-4. serialize it again,
-5. re-encrypt the result.
-
-It is useful for validating parser compatibility after code changes.
-
-## Project Layout
-
-```text
-.
-|-- assets/
-|   `-- ui/                 # HTML/CSS/JS frontend hosted inside WebView2
-|-- docs/
-|   `-- images/             # README assets
-|-- src/
-|   `-- main.cpp            # Win32 app, save parsing, crypto, UI bridge
-|-- third_party_webview2/   # Bundled WebView2 SDK files
-|-- build.bat
-`-- package_release.bat
-```
 
 ## Notes
 
