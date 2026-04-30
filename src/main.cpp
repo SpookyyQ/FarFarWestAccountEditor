@@ -27,8 +27,8 @@ namespace ffw {
 
 using ByteVec = std::vector<unsigned char>;
 
-static const wchar_t* kWindowClass = L"FarFarWestSaveStudioWindow";
-static const wchar_t* kWindowTitle = L"FarFarWest Save Studio";
+static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
+static const wchar_t* kWindowTitle = L"FarFarWest Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
 
@@ -1396,6 +1396,24 @@ static Property* FindMapStructPropByKey(SaveFile& save, const std::string& topLe
     return NULL;
 }
 
+static int RunSmokeTest(const std::wstring& path) {
+    try {
+        std::wstring seed = SeedForSavePath(path);
+        ByteVec encrypted = ReadFileBytes(path);
+        ByteVec key = DeriveKey(seed);
+        ByteVec plain = DecryptSaveBytes(encrypted, key);
+        SaveFile save = ParseGvas(plain);
+        ByteVec roundtrip = SerializeGvas(save);
+        ByteVec encryptedRoundtrip = EncryptSaveBytes(roundtrip, key);
+        if (roundtrip.empty() || encryptedRoundtrip.empty()) {
+            return 3;
+        }
+        return 0;
+    } catch (...) {
+        return 2;
+    }
+}
+
 class AppWindow {
 public:
     AppWindow() = default;
@@ -2205,9 +2223,20 @@ private:
 } // namespace ffw
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv) {
+        if (argc >= 3 && lstrcmpiW(argv[1], L"--smoke-test") == 0) {
+            int code = ffw::RunSmokeTest(argv[2]);
+            LocalFree(argv);
+            return code;
+        }
+        LocalFree(argv);
+    }
+
     ffw::AppWindow app;
     if (!app.Create(hInstance)) {
-        MessageBoxW(NULL, L"Unable to create the main window.", L"FarFarWest Save Studio", MB_ICONERROR);
+        MessageBoxW(NULL, L"Unable to create the main window.", L"FarFarWest Unlock all tool", MB_ICONERROR);
         return 1;
     }
     return app.Run();

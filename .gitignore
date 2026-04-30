@@ -1,5 +1,5 @@
-build\
-dist\
+build/
+dist/
 *.obj
 *.exe
 *.pdb

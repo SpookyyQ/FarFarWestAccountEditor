@@ -1,4 +1,4 @@
-# FarFarWest Save Studio C++
+# FarFarWest Unlock all tool
 
 Native Windows rewrite of the FarFarWest save editor as a portable desktop `.exe`.
 
@@ -10,7 +10,7 @@ Run:
 build.bat
 ```
 
-The output exe is written to `build\FarFarWestSaveStudio.exe`.
+The output exe is written to `build\FarFarWest Unlock all tool.exe`.
 
 ## Current Features
 
@@ -24,4 +24,8 @@ The output exe is written to `build\FarFarWestSaveStudio.exe`.
 
 ## Distribution
 
-No Python installation is required for end users. The intended release format is a portable Windows `.exe`.
+No Python installation is required for end users. The current release format is a portable Windows app folder:
+
+- `FarFarWest Unlock all tool.exe`
+- `libc++.dll`
+- `libunwind.dll`
