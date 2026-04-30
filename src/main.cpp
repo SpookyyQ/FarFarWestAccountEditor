@@ -33,7 +33,7 @@ using ByteVec = std::vector<unsigned char>;
 static const UINT WM_APP_LOAD_COMPLETE = WM_APP + 1;
 
 static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
-static const wchar_t* kWindowTitle = L"FarFarWest Unlock Tool";
+static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
 
@@ -1298,7 +1298,6 @@ static int SetAllSpellLevels(SaveFile& save, int level) {
 }
 
 static void UnlockAll(SaveFile& save) {
-    AddMissingBuildableWeapons(save);
     SetAllWeaponLevels(save, 100);
     EnsureWeaponPrestigeInventory(save, 10);
     EnsureChallengeItem(save, "Prestige", 10);
@@ -1660,14 +1659,17 @@ public:
         INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_STANDARD_CLASSES };
         InitCommonControlsEx(&icc);
 
-        WNDCLASSW wc = {};
+        WNDCLASSEXW wc = {};
+        wc.cbSize = sizeof(wc);
         wc.lpfnWndProc = WindowProcSetup;
         wc.hInstance = instance;
         wc.lpszClassName = kWindowClass;
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
         wc.style = CS_HREDRAW | CS_VREDRAW;
-        RegisterClassW(&wc);
+        wc.hIcon   = LoadIconW(instance, MAKEINTRESOURCEW(1));
+        wc.hIconSm = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR));
+        RegisterClassExW(&wc);
 
         hwnd_ = CreateWindowExW(
             0, kWindowClass, kWindowTitle,
@@ -2479,10 +2481,6 @@ private:
             DoBulkAction(L"Weapon prestige 10", [this]() { EnsureWeaponPrestigeInventory(state_.save, 10); });
             return;
         }
-        if (message == L"action:addBuildable") {
-            DoBulkAction(L"Add missing buildable weapons", [this]() { AddMissingBuildableWeapons(state_.save); });
-            return;
-        }
         if (message == L"action:unlockAll") {
             DoBulkAction(L"Unlock All", [this]() { UnlockAll(state_.save); });
             return;
@@ -2577,7 +2575,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
     ffw::AppWindow app;
     if (!app.Create(hInstance)) {
-        MessageBoxW(NULL, L"Unable to create the main window.", L"FarFarWest Unlock all tool", MB_ICONERROR);
+        MessageBoxW(NULL, L"Unable to create the main window.", L"Far Far West Unlock all tool", MB_ICONERROR);
         CoUninitialize();
         return 1;
     }
