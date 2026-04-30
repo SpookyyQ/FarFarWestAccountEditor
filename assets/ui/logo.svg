@@ -1,0 +1,15 @@
+<svg width="1024" height="512" viewBox="0 0 1024 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="12" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)" fill="#FAFAFD" font-family="Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif" font-weight="900" letter-spacing="4">
+    <g transform="translate(116 214) rotate(-14)">
+      <text x="0" y="0" font-size="180">FAR FAR</text>
+    </g>
+    <g transform="translate(248 430) rotate(-14)">
+      <text x="0" y="0" font-size="212">WEST</text>
+    </g>
+  </g>
+</svg>

@@ -6,3 +6,4 @@ release/
 *.pdb
 *.ilk
 *.log
+*.nupkg

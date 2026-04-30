@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FarFarWest Unlock Tool</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="./logo.svg" alt="Far Far West">
+      </div>
+      <div class="save-badge" id="saveBadge">No save loaded</div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar panel">
+        <div>
+          <p class="section-kicker">Navigation</p>
+          <nav class="tab-list radio-container" id="tabList"></nav>
+        </div>
+
+        <div class="save-actions">
+          <div>
+            <p class="section-kicker">Save Actions</p>
+            <p class="section-copy">Open, import and write save files from here.</p>
+          </div>
+          <div class="save-grid">
+            <button class="soft-button" data-command="open">Open Save</button>
+            <button class="soft-button" data-command="autoImport">Auto Import</button>
+            <button class="soft-button" data-command="openFolder">Save Folder</button>
+            <button class="soft-button" data-command="save">Save</button>
+            <button class="soft-button wide" data-command="saveAs">Save As</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-column">
+        <section class="panel action-strip">
+          <div>
+            <p class="section-kicker">Quick Actions</p>
+            <h2>Unlock And Progress Actions</h2>
+          </div>
+          <div class="action-list">
+            <button class="chip" data-command="action:weapon100">Weapons 100</button>
+            <button class="chip" data-command="action:spell100">Spells 100</button>
+            <button class="chip" data-command="action:prestige10">Prestige 10</button>
+            <button class="chip" data-command="action:addBuildable">Add Weapons</button>
+            <button class="chip primary" data-command="action:unlockAll">Unlock Everything</button>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <section class="panel browser-panel">
+            <div class="panel-head">
+              <div>
+                <p class="section-kicker">Field Browser</p>
+                <h2 id="tabTitle">Overview</h2>
+              </div>
+              <div class="metric-pill" id="rowMetric">0 fields</div>
+            </div>
+
+            <div class="summary-card" id="summaryText">Open a save or use auto import to begin.</div>
+
+            <div class="row-list" id="rowList"></div>
+          </section>
+
+          <section class="panel editor-panel">
+            <div class="panel-head">
+              <div>
+                <p class="section-kicker">Field Details</p>
+                <h2 id="selectedTitle">No field selected</h2>
+              </div>
+              <div class="metric-pill" id="fieldType">Type</div>
+            </div>
+
+            <pre class="detail-box" id="detailText">Select a field from the current tab to inspect or edit it.</pre>
+
+            <label class="field-label" for="valueInput">New Value</label>
+            <input id="valueInput" class="text-input" type="text" placeholder="Enter the new value">
+
+            <button class="apply-button" id="applyButton">Apply Value</button>
+          </section>
+        </section>
+
+        <footer class="panel footer-bar">
+          <span class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="spinner" id="loadingSpinner" aria-hidden="true" hidden></span>
+          </span>
+          <span id="statusText">Open a save file or auto-import from FarFarWest.</span>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

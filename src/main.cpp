@@ -6,8 +6,11 @@
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <bcrypt.h>
+#include <wrl/client.h>
+#include "WebView2.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <set>
+#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -26,7 +30,7 @@
 namespace ffw {
 
 using ByteVec = std::vector<unsigned char>;
-static const UINT WM_APP_LOAD_SAVE = WM_APP + 1;
+static const UINT WM_APP_LOAD_COMPLETE = WM_APP + 1;
 
 static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"FarFarWest Unlock Tool";
@@ -62,20 +66,20 @@ static const wchar_t* kUtilityItems[] = {
 };
 
 struct ColorPalette {
-    COLORREF bgTop = RGB(18, 18, 20);
-    COLORREF bgBottom = RGB(28, 28, 32);
-    COLORREF panel = RGB(30, 30, 34);
-    COLORREF panelAlt = RGB(24, 24, 28);
-    COLORREF panelGlass = RGB(38, 38, 44);
-    COLORREF panelEdge = RGB(72, 72, 82);
-    COLORREF border = RGB(86, 86, 96);
-    COLORREF accent = RGB(152, 156, 166);
-    COLORREF accentSoft = RGB(102, 106, 116);
-    COLORREF accentDeep = RGB(64, 68, 76);
-    COLORREF accentBright = RGB(208, 212, 220);
-    COLORREF text = RGB(242, 242, 246);
-    COLORREF textMuted = RGB(176, 178, 184);
-    COLORREF success = RGB(138, 182, 152);
+    COLORREF bgTop = RGB(16, 16, 24);
+    COLORREF bgBottom = RGB(26, 24, 36);
+    COLORREF panel = RGB(24, 24, 32);
+    COLORREF panelAlt = RGB(18, 18, 26);
+    COLORREF panelGlass = RGB(34, 34, 46);
+    COLORREF panelEdge = RGB(52, 52, 68);
+    COLORREF border = RGB(74, 74, 94);
+    COLORREF accent = RGB(134, 114, 255);
+    COLORREF accentSoft = RGB(98, 86, 186);
+    COLORREF accentDeep = RGB(46, 42, 82);
+    COLORREF accentBright = RGB(222, 216, 255);
+    COLORREF text = RGB(244, 244, 248);
+    COLORREF textMuted = RGB(164, 166, 182);
+    COLORREF success = RGB(126, 199, 158);
 };
 
 static ColorPalette gColors;
@@ -131,6 +135,43 @@ static std::string FriendlyItemName(const std::string& itemName) {
         out.push_back(name[i]);
     }
     return out;
+}
+
+static std::wstring HumanizeIdentifier(const std::string& value) {
+    std::wstring wide = Utf8ToWide(value);
+    std::wstring out;
+    out.reserve(wide.size() + 8);
+    for (size_t i = 0; i < wide.size(); ++i) {
+        wchar_t ch = wide[i];
+        if (ch == L'_' || ch == L'-' || ch == L'/') {
+            if (!out.empty() && out.back() != L' ') out.push_back(L' ');
+            continue;
+        }
+
+        if (!out.empty()) {
+            wchar_t prev = wide[i - 1];
+            bool splitBefore =
+                ((iswlower(prev) || iswdigit(prev)) && iswupper(ch)) ||
+                (iswalpha(prev) && iswdigit(ch)) ||
+                (iswdigit(prev) && iswalpha(ch));
+            if (splitBefore && out.back() != L' ') out.push_back(L' ');
+        }
+
+        if (out.empty() || out.back() == L' ') out.push_back(static_cast<wchar_t>(towupper(ch)));
+        else out.push_back(ch);
+    }
+    return Trim(out);
+}
+
+static std::wstring FriendlyItemLabel(const std::string& itemName) {
+    return Utf8ToWide(FriendlyItemName(itemName));
+}
+
+static std::wstring FriendlyLevelLabel(const std::string& key) {
+    if (StartsWith(key, "item") && EndsWith(key, "Lvl") && key.size() > 3) {
+        return FriendlyItemLabel(key.substr(0, key.size() - 3)) + L" Level";
+    }
+    return HumanizeIdentifier(key);
 }
 
 static bool NameMatchesList(const std::string& itemName, const wchar_t* const* values, size_t count) {
@@ -1330,6 +1371,11 @@ enum ControlId {
     IDC_EDIT_DETAIL,
     IDC_EDIT_VALUE,
     IDC_BTN_APPLY,
+    IDC_STATIC_SUMMARY,
+    IDC_STATIC_SEARCH_LABEL,
+    IDC_STATIC_LIST_LABEL,
+    IDC_STATIC_EDITOR_LABEL,
+    IDC_STATIC_VALUE_LABEL,
     IDC_STATIC_SELECTED,
     IDC_STATIC_TYPE,
     IDC_STATIC_STATUS
@@ -1349,9 +1395,20 @@ struct UiRow {
     std::string id;
     std::wstring line;
     std::wstring selectedText;
+    std::wstring rawName;
+    std::wstring noteText;
     std::wstring typeName;
     std::wstring valueText;
     bool editable = true;
+};
+
+struct AsyncLoadResult {
+    unsigned int token = 0;
+    std::wstring path;
+    ByteVec key;
+    SaveFile save;
+    std::string error;
+    bool success = false;
 };
 
 static std::wstring ToLowerWide(std::wstring text) {
@@ -1425,6 +1482,175 @@ static int RunSmokeTest(const std::wstring& path) {
     }
 }
 
+static std::string JsonEscapeUtf8(const std::string& value) {
+    std::ostringstream out;
+    for (unsigned char ch : value) {
+        switch (ch) {
+        case '\\': out << "\\\\"; break;
+        case '"': out << "\\\""; break;
+        case '\b': out << "\\b"; break;
+        case '\f': out << "\\f"; break;
+        case '\n': out << "\\n"; break;
+        case '\r': out << "\\r"; break;
+        case '\t': out << "\\t"; break;
+        default:
+            if (ch < 0x20) {
+                out << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(ch) << std::dec;
+            } else {
+                out << static_cast<char>(ch);
+            }
+            break;
+        }
+    }
+    return out.str();
+}
+
+static std::string JsonString(const std::wstring& value) {
+    return "\"" + JsonEscapeUtf8(WideToUtf8(value)) + "\"";
+}
+
+static std::string JsonStringUtf8(const std::string& value) {
+    return "\"" + JsonEscapeUtf8(value) + "\"";
+}
+
+static std::wstring UrlDecodeComponent(const std::wstring& value) {
+    std::string bytes;
+    bytes.reserve(value.size());
+    for (size_t i = 0; i < value.size(); ++i) {
+        wchar_t ch = value[i];
+        if (ch == L'%' && i + 2 < value.size()) {
+            wchar_t hex[3] = { value[i + 1], value[i + 2], 0 };
+            bytes.push_back(static_cast<char>(wcstol(hex, NULL, 16)));
+            i += 2;
+        } else if (ch == L'+') {
+            bytes.push_back(' ');
+        } else {
+            bytes.push_back(static_cast<char>(ch));
+        }
+    }
+    return Utf8ToWide(bytes);
+}
+
+static bool StartsWithWide(const std::wstring& value, const wchar_t* prefix) {
+    size_t prefixLen = lstrlenW(prefix);
+    return value.size() >= prefixLen && value.compare(0, prefixLen, prefix) == 0;
+}
+
+static std::wstring ExecutableDir() {
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    PathRemoveFileSpecW(path);
+    return path;
+}
+
+static std::wstring UiAssetDir() {
+    return ExecutableDir() + L"\\ui";
+}
+
+static std::wstring HResultMessage(HRESULT hr) {
+    LPWSTR buffer = NULL;
+    DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
+    DWORD size = FormatMessageW(flags, NULL, static_cast<DWORD>(hr), 0, reinterpret_cast<LPWSTR>(&buffer), 0, NULL);
+    std::wstring message;
+    if (size && buffer) {
+        message.assign(buffer, size);
+        LocalFree(buffer);
+    } else {
+        std::wostringstream out;
+        out << L"HRESULT 0x" << std::hex << std::uppercase << static_cast<unsigned long>(hr);
+        message = out.str();
+    }
+    return Trim(message);
+}
+
+template <typename Interface>
+const IID& CallbackInterfaceId();
+
+template <>
+inline const IID& CallbackInterfaceId<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>() {
+    return IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
+}
+
+template <>
+inline const IID& CallbackInterfaceId<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>() {
+    return IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler;
+}
+
+template <>
+inline const IID& CallbackInterfaceId<ICoreWebView2WebMessageReceivedEventHandler>() {
+    return IID_ICoreWebView2WebMessageReceivedEventHandler;
+}
+
+template <typename Interface>
+class ComCallbackBase : public Interface {
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
+        if (!ppvObject) return E_POINTER;
+        *ppvObject = NULL;
+        if (riid == IID_IUnknown || riid == CallbackInterfaceId<Interface>()) {
+            *ppvObject = static_cast<Interface*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override {
+        return static_cast<ULONG>(++refCount_);
+    }
+
+    ULONG STDMETHODCALLTYPE Release() override {
+        ULONG count = static_cast<ULONG>(--refCount_);
+        if (count == 0) delete this;
+        return count;
+    }
+
+protected:
+    virtual ~ComCallbackBase() = default;
+
+private:
+    std::atomic<ULONG> refCount_{ 1 };
+};
+
+class EnvironmentCompletedHandler : public ComCallbackBase<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler> {
+public:
+    explicit EnvironmentCompletedHandler(std::function<HRESULT(HRESULT, ICoreWebView2Environment*)> callback)
+        : callback_(std::move(callback)) {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode, ICoreWebView2Environment* result) override {
+        return callback_(errorCode, result);
+    }
+
+private:
+    std::function<HRESULT(HRESULT, ICoreWebView2Environment*)> callback_;
+};
+
+class ControllerCompletedHandler : public ComCallbackBase<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler> {
+public:
+    explicit ControllerCompletedHandler(std::function<HRESULT(HRESULT, ICoreWebView2Controller*)> callback)
+        : callback_(std::move(callback)) {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(HRESULT errorCode, ICoreWebView2Controller* result) override {
+        return callback_(errorCode, result);
+    }
+
+private:
+    std::function<HRESULT(HRESULT, ICoreWebView2Controller*)> callback_;
+};
+
+class WebMessageReceivedHandler : public ComCallbackBase<ICoreWebView2WebMessageReceivedEventHandler> {
+public:
+    explicit WebMessageReceivedHandler(std::function<HRESULT(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*)> callback)
+        : callback_(std::move(callback)) {}
+
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) override {
+        return callback_(sender, args);
+    }
+
+private:
+    std::function<HRESULT(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*)> callback_;
+};
+
 class AppWindow {
 public:
     AppWindow() = default;
@@ -1446,7 +1672,7 @@ public:
         hwnd_ = CreateWindowExW(
             0, kWindowClass, kWindowTitle,
             WS_OVERLAPPEDWINDOW,
-            CW_USEDEFAULT, CW_USEDEFAULT, 1320, 900,
+            CW_USEDEFAULT, CW_USEDEFAULT, 1440, 980,
             NULL, NULL, instance, this);
         return hwnd_ != NULL;
     }
@@ -1463,42 +1689,31 @@ public:
     }
 
 private:
+    static constexpr const wchar_t* kTabTitles_[7] = {
+        L"Overview",
+        L"Inventory",
+        L"Levels",
+        L"Upgrades",
+        L"Jokers",
+        L"Rewards",
+        L"Other"
+    };
+
     HINSTANCE hInstance_ = NULL;
     HWND hwnd_ = NULL;
-    HFONT uiFont_ = NULL;
-    HFONT titleFont_ = NULL;
-    HFONT subtitleFont_ = NULL;
-    HBRUSH panelBrush_ = NULL;
-    HBRUSH panelAltBrush_ = NULL;
-    RECT contentRect_ = {};
-    RECT headerRect_ = {};
-
-    HWND btnOpen_ = NULL;
-    HWND btnAutoImport_ = NULL;
-    HWND btnOpenFolder_ = NULL;
-    HWND btnSave_ = NULL;
-    HWND btnSaveAs_ = NULL;
-    HWND btnWeapon100_ = NULL;
-    HWND btnSpell100_ = NULL;
-    HWND btnPrestige10_ = NULL;
-    HWND btnAddBuildable_ = NULL;
-    HWND btnUnlockAll_ = NULL;
-    HWND tabButtons_[7] = {};
-    HWND searchEdit_ = NULL;
-    HWND rowList_ = NULL;
-    HWND detailEdit_ = NULL;
-    HWND valueEdit_ = NULL;
-    HWND applyButton_ = NULL;
-    HWND selectedStatic_ = NULL;
-    HWND typeStatic_ = NULL;
-    HWND statusLabel_ = NULL;
-
+    Microsoft::WRL::ComPtr<ICoreWebView2Environment> webEnvironment_;
+    Microsoft::WRL::ComPtr<ICoreWebView2Controller> webController_;
+    Microsoft::WRL::ComPtr<ICoreWebView2> webView_;
     AppState state_;
     int currentTab_ = TAB_OVERVIEW;
     std::vector<UiRow> rows_;
     std::vector<int> filteredRows_;
     std::wstring searchText_;
-    std::optional<std::wstring> pendingLoadPath_;
+    std::string selectedRowId_;
+    bool isLoading_ = false;
+    unsigned int nextLoadToken_ = 0;
+    bool webViewReady_ = false;
+    std::wstring paintMessage_ = L"Starting WebView2 UI...";
 
     static LRESULT CALLBACK WindowProcSetup(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (msg == WM_NCCREATE) {
@@ -1522,209 +1737,282 @@ private:
         DwmSetWindowAttribute(hwnd_, 20, &dark, sizeof(dark));
     }
 
-    void CreateControls() {
-        uiFont_ = CreateFontW(
-            -17, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        titleFont_ = CreateFontW(
-            -28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        subtitleFont_ = CreateFontW(
-            -15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    void InitializeWebView() {
+        paintMessage_ = L"Loading WebView2 environment...";
+        InvalidateRect(hwnd_, NULL, TRUE);
 
-        panelBrush_ = CreateSolidBrush(gColors.panel);
-        panelAltBrush_ = CreateSolidBrush(gColors.panelAlt);
+        auto* environmentHandler = new EnvironmentCompletedHandler(
+            [this](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT {
+                if (FAILED(result) || !environment) {
+                    std::wstring message = L"WebView2 could not be initialized.\n\n";
+                    message += HResultMessage(result);
+                    MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
+                    paintMessage_ = L"WebView2 initialization failed.";
+                    InvalidateRect(hwnd_, NULL, TRUE);
+                    return result;
+                }
 
-        btnOpen_ = CreateButton(L"Open", IDC_BTN_OPEN);
-        btnAutoImport_ = CreateButton(L"Auto Import", IDC_BTN_AUTO_IMPORT);
-        btnOpenFolder_ = CreateButton(L"Save Folder", IDC_BTN_OPEN_FOLDER);
-        btnSave_ = CreateButton(L"Save", IDC_BTN_SAVE);
-        btnSaveAs_ = CreateButton(L"Save As", IDC_BTN_SAVE_AS);
-        btnWeapon100_ = CreateButton(L"Weapons to 100", IDC_BTN_WEAPON_100);
-        btnSpell100_ = CreateButton(L"Spells to 100", IDC_BTN_SPELL_100);
-        btnPrestige10_ = CreateButton(L"Weapon Prestige 10", IDC_BTN_PRESTIGE_10);
-        btnAddBuildable_ = CreateButton(L"Add Missing Weapons", IDC_BTN_ADD_BUILDABLE);
-        btnUnlockAll_ = CreateButton(L"Unlock All", IDC_BTN_UNLOCK_ALL);
+                webEnvironment_ = environment;
+                auto* controllerHandler = new ControllerCompletedHandler(
+                    [this](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT {
+                        if (FAILED(controllerResult) || !controller) {
+                            std::wstring message = L"WebView2 controller could not be created.\n\n";
+                            message += HResultMessage(controllerResult);
+                            MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
+                            paintMessage_ = L"WebView2 controller initialization failed.";
+                            InvalidateRect(hwnd_, NULL, TRUE);
+                            return controllerResult;
+                        }
 
-        tabButtons_[0] = CreateButton(L"Overview", IDC_TAB_OVERVIEW);
-        tabButtons_[1] = CreateButton(L"Inventory", IDC_TAB_INVENTORY);
-        tabButtons_[2] = CreateButton(L"Levels", IDC_TAB_LEVELS);
-        tabButtons_[3] = CreateButton(L"Upgrades", IDC_TAB_UPGRADES);
-        tabButtons_[4] = CreateButton(L"Jokers", IDC_TAB_JOKERS);
-        tabButtons_[5] = CreateButton(L"Rewards", IDC_TAB_REWARDS);
-        tabButtons_[6] = CreateButton(L"Other", IDC_TAB_OTHER);
-        searchEdit_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-                                      0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_EDIT_SEARCH), hInstance_, NULL);
-        rowList_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"", WS_CHILD | WS_VISIBLE | LBS_NOTIFY | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
-                                   0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_LIST_ROWS), hInstance_, NULL);
-        detailEdit_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL,
-                                      0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_EDIT_DETAIL), hInstance_, NULL);
-        valueEdit_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-                                     0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_EDIT_VALUE), hInstance_, NULL);
-        applyButton_ = CreateButton(L"Apply Value", IDC_BTN_APPLY);
-        selectedStatic_ = CreateWindowExW(0, L"STATIC", L"Selected", WS_CHILD | WS_VISIBLE,
-                                          0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_STATIC_SELECTED), hInstance_, NULL);
-        typeStatic_ = CreateWindowExW(0, L"STATIC", L"Type", WS_CHILD | WS_VISIBLE,
-                                      0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_STATIC_TYPE), hInstance_, NULL);
-        statusLabel_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | WS_VISIBLE,
-                                       0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(IDC_STATIC_STATUS), hInstance_, NULL);
+                        webController_ = controller;
+                        webController_->get_CoreWebView2(webView_.GetAddressOf());
+                        webController_->put_IsVisible(TRUE);
+                        ResizeWebView();
 
-        HWND controls[] = {
-            btnOpen_, btnAutoImport_, btnOpenFolder_, btnSave_, btnSaveAs_,
-            btnWeapon100_, btnSpell100_, btnPrestige10_, btnAddBuildable_, btnUnlockAll_,
-            tabButtons_[0], tabButtons_[1], tabButtons_[2], tabButtons_[3], tabButtons_[4], tabButtons_[5], tabButtons_[6],
-            searchEdit_, rowList_, detailEdit_, valueEdit_,
-            applyButton_, selectedStatic_, typeStatic_, statusLabel_
-        };
-        for (HWND control : controls) {
-            SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(uiFont_), TRUE);
+                        auto* webMessageHandler = new WebMessageReceivedHandler(
+                            [this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                LPWSTR raw = NULL;
+                                if (args && SUCCEEDED(args->TryGetWebMessageAsString(&raw)) && raw) {
+                                    std::wstring message = raw;
+                                    CoTaskMemFree(raw);
+                                    HandleWebMessage(message);
+                                }
+                                return S_OK;
+                            });
+                        webView_->add_WebMessageReceived(webMessageHandler, nullptr);
+                        webMessageHandler->Release();
+
+                        std::wstring uiDir = UiAssetDir();
+                        std::wstring uiIndex = uiDir + L"\\index.html";
+                        if (PathFileExistsW(uiIndex.c_str())) {
+                            Microsoft::WRL::ComPtr<ICoreWebView2_3> webView3;
+                            if (SUCCEEDED(webView_->QueryInterface(IID_ICoreWebView2_3, reinterpret_cast<void**>(webView3.GetAddressOf()))) && webView3) {
+                                webView3->SetVirtualHostNameToFolderMapping(
+                                    L"appassets.local",
+                                    uiDir.c_str(),
+                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+                            }
+                            webView_->Navigate(L"https://appassets.local/index.html");
+                            paintMessage_ = L"Loading modern HTML/CSS UI...";
+                        } else {
+                            webView_->NavigateToString(
+                                L"<html><body style='background:#101018;color:#f4f4f8;font-family:Segoe UI;padding:32px'>"
+                                L"<h2>UI assets not found</h2><p>The WebView2 host started, but <code>ui/index.html</code> is missing next to the executable.</p>"
+                                L"</body></html>");
+                            paintMessage_ = L"UI assets missing.";
+                        }
+                        return S_OK;
+                    });
+
+                HRESULT controllerHr = webEnvironment_->CreateCoreWebView2Controller(hwnd_, controllerHandler);
+                controllerHandler->Release();
+                if (FAILED(controllerHr)) {
+                    std::wstring message = L"WebView2 controller startup failed.\n\n";
+                    message += HResultMessage(controllerHr);
+                    MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
+                    paintMessage_ = L"WebView2 controller startup failed.";
+                    InvalidateRect(hwnd_, NULL, TRUE);
+                }
+                return controllerHr;
+            });
+
+        HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+            NULL,
+            NULL,
+            NULL,
+            environmentHandler);
+        environmentHandler->Release();
+
+        if (FAILED(hr)) {
+            std::wstring message = L"WebView2 startup call failed.\n\n";
+            message += HResultMessage(hr);
+            MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
+            paintMessage_ = L"WebView2 startup call failed.";
+            InvalidateRect(hwnd_, NULL, TRUE);
+        }
+    }
+
+    void ResizeWebView() {
+        if (!webController_) return;
+        RECT client;
+        GetClientRect(hwnd_, &client);
+        webController_->put_Bounds(client);
+    }
+
+    const wchar_t* CurrentTabTitle() const {
+        return kTabTitles_[currentTab_];
+    }
+
+    std::wstring CurrentSaveName() const {
+        if (!state_.savePath.has_value()) return L"No save loaded";
+        return PathFindFileNameW(state_.savePath.value().c_str());
+    }
+
+    std::wstring BuildSummaryText() const {
+        std::wostringstream summary;
+        if (isLoading_) {
+            summary << L"Loading save in background. The UI stays responsive while data imports.";
+        } else if (state_.loaded) {
+            summary << L"Save: " << CurrentSaveName()
+                    << L" | Tab: " << CurrentTabTitle()
+                    << L" | Visible: " << filteredRows_.size()
+                    << L" / " << rows_.size();
+            if (!searchText_.empty()) {
+                summary << L" | Filter: " << searchText_;
+            }
+        } else {
+            summary << L"Open a save or use auto import to begin.";
+        }
+        return summary.str();
+    }
+
+    std::wstring BuildDetailText(const UiRow& row) const {
+        std::wstring detail = row.selectedText;
+        if (!row.rawName.empty() && row.rawName != row.selectedText) {
+            detail += L"\nRaw key: " + row.rawName;
+        }
+        if (!row.noteText.empty()) {
+            detail += L"\n" + row.noteText;
+        }
+        detail += L"\nType: " + row.typeName;
+        detail += L"\nCurrent value: " + row.valueText;
+        if (row.editable) {
+            detail += L"\n\nApply updates the loaded save in memory. Use Save to write the file.";
+        }
+        return detail;
+    }
+
+    UiRow* FindRowById(const std::string& id) {
+        for (UiRow& row : rows_) {
+            if (row.id == id) return &row;
+        }
+        return NULL;
+    }
+
+    UiRow* SelectedRow() {
+        return selectedRowId_.empty() ? NULL : FindRowById(selectedRowId_);
+    }
+
+    const UiRow* SelectedRow() const {
+        if (selectedRowId_.empty()) return NULL;
+        for (const UiRow& row : rows_) {
+            if (row.id == selectedRowId_) return &row;
+        }
+        return NULL;
+    }
+
+    void PublishState() {
+        if (!webView_ || !webViewReady_) return;
+        std::wstring json = Utf8ToWide(BuildStateJson());
+        webView_->PostWebMessageAsJson(json.c_str());
+    }
+
+    std::string BuildStateJson() const {
+        std::ostringstream out;
+        out << "{";
+        out << "\"type\":\"state\",";
+        out << "\"loaded\":" << (state_.loaded ? "true" : "false") << ",";
+        out << "\"loading\":" << (isLoading_ ? "true" : "false") << ",";
+        out << "\"canSave\":" << ((state_.loaded && !isLoading_) ? "true" : "false") << ",";
+        out << "\"currentTab\":" << currentTab_ << ",";
+        out << "\"currentTabTitle\":" << JsonString(CurrentTabTitle()) << ",";
+        out << "\"saveName\":" << JsonString(CurrentSaveName()) << ",";
+        out << "\"summary\":" << JsonString(BuildSummaryText()) << ",";
+        out << "\"status\":" << JsonString(state_.status) << ",";
+        out << "\"rowsVisible\":" << filteredRows_.size() << ",";
+        out << "\"rowsTotal\":" << rows_.size() << ",";
+        out << "\"search\":" << JsonString(searchText_) << ",";
+        out << "\"selectedRowId\":";
+        if (selectedRowId_.empty()) out << "null";
+        else out << JsonStringUtf8(selectedRowId_);
+        out << ",";
+        out << "\"rows\":[";
+        for (size_t i = 0; i < filteredRows_.size(); ++i) {
+            const UiRow& row = rows_[filteredRows_[i]];
+            if (i > 0) out << ",";
+            out << "{";
+            out << "\"id\":" << JsonStringUtf8(row.id) << ",";
+            out << "\"label\":" << JsonString(row.selectedText) << ",";
+            out << "\"line\":" << JsonString(row.line) << ",";
+            out << "\"value\":" << JsonString(row.valueText) << ",";
+            out << "\"type\":" << JsonString(row.typeName) << ",";
+            out << "\"rawName\":" << JsonString(row.rawName) << ",";
+            out << "\"note\":" << JsonString(row.noteText) << ",";
+            out << "\"editable\":" << (row.editable ? "true" : "false");
+            out << "}";
+        }
+        out << "],";
+        out << "\"selected\":";
+        if (const UiRow* row = SelectedRow()) {
+            out << "{";
+            out << "\"id\":" << JsonStringUtf8(row->id) << ",";
+            out << "\"label\":" << JsonString(row->selectedText) << ",";
+            out << "\"line\":" << JsonString(row->line) << ",";
+            out << "\"value\":" << JsonString(row->valueText) << ",";
+            out << "\"type\":" << JsonString(row->typeName) << ",";
+            out << "\"rawName\":" << JsonString(row->rawName) << ",";
+            out << "\"note\":" << JsonString(row->noteText) << ",";
+            out << "\"detail\":" << JsonString(BuildDetailText(*row)) << ",";
+            out << "\"editable\":" << (row->editable ? "true" : "false");
+            out << "}";
+        } else {
+            out << "null";
+        }
+        out << "}";
+        return out.str();
+    }
+
+    void BeginAsyncLoad(const std::wstring& path) {
+        if (isLoading_) return;
+
+        isLoading_ = true;
+        ++nextLoadToken_;
+        unsigned int token = nextLoadToken_;
+        state_.status = L"Loading " + path + L"...";
+        PublishState();
+
+        HWND target = hwnd_;
+        std::thread([target, path, token]() {
+            std::unique_ptr<AsyncLoadResult> result(new AsyncLoadResult());
+            result->token = token;
+            result->path = path;
+            try {
+                std::wstring seed = SeedForSavePath(path);
+                ByteVec encrypted = ReadFileBytes(path);
+                result->key = DeriveKey(seed);
+                ByteVec plain = DecryptSaveBytes(encrypted, result->key);
+                result->save = ParseGvas(plain);
+                result->success = true;
+            } catch (const std::exception& ex) {
+                result->error = ex.what();
+            }
+
+            AsyncLoadResult* raw = result.release();
+            if (!PostMessageW(target, WM_APP_LOAD_COMPLETE, static_cast<WPARAM>(token), reinterpret_cast<LPARAM>(raw))) {
+                delete raw;
+            }
+        }).detach();
+    }
+
+    void FinishAsyncLoad(unsigned int token, AsyncLoadResult* rawResult) {
+        std::unique_ptr<AsyncLoadResult> result(rawResult);
+        if (!result || token != nextLoadToken_) return;
+
+        isLoading_ = false;
+        if (result->success) {
+            state_.key = std::move(result->key);
+            state_.save = std::move(result->save);
+            state_.savePath = result->path;
+            state_.loaded = true;
+            state_.status = L"Loaded " + result->path;
+            searchText_.clear();
+            RefreshViews();
+            return;
         }
 
-        SetWindowTextW(searchEdit_, L"");
-        SetWindowTextW(detailEdit_, L"Pick a field from the current tab to inspect or edit it.");
-    }
-
-    HWND CreateButton(const wchar_t* text, int id) {
-        return CreateWindowExW(0, L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-                               0, 0, 0, 0, hwnd_, reinterpret_cast<HMENU>(id), hInstance_, NULL);
-    }
-
-    void LayoutControls(int width, int height) {
-        const int margin = 18;
-        const int gap = 12;
-        const int buttonHeight = 38;
-        const int topY = 118;
-        const int columns = 5;
-        const int availableWidth = width - margin * 2;
-        const int buttonWidth = (availableWidth - gap * (columns - 1)) / columns;
-        const int rowGap = 12;
-        HWND primaryButtons[] = { btnOpen_, btnAutoImport_, btnOpenFolder_, btnSave_, btnSaveAs_ };
-        HWND actionButtons[] = { btnWeapon100_, btnSpell100_, btnPrestige10_, btnAddBuildable_, btnUnlockAll_ };
-        for (int i = 0; i < columns; ++i) {
-            int x = margin + i * (buttonWidth + gap);
-            MoveWindow(primaryButtons[i], x, topY, buttonWidth, buttonHeight, TRUE);
-            MoveWindow(actionButtons[i], x, topY + buttonHeight + rowGap, buttonWidth, buttonHeight, TRUE);
-        }
-
-        int contentTop = topY + buttonHeight * 2 + rowGap + 22;
-        int contentBottom = height - 88;
-        int tabHeight = 34;
-        SetRect(&headerRect_, margin, topY - 14, width - margin, topY + buttonHeight * 2 + rowGap + 8);
-        SetRect(&contentRect_, margin, contentTop + tabHeight - 2, width - margin, contentBottom);
-
-        int tabGap = 8;
-        int tabWidth = ((width - margin * 2) - tabGap * 6) / 7;
-        for (int i = 0; i < 7; ++i) {
-            int tabX = margin + i * (tabWidth + tabGap);
-            MoveWindow(tabButtons_[i], tabX, contentTop, tabWidth, tabHeight, TRUE);
-        }
-
-        int bodyPadding = 14;
-        int bodyTop = contentRect_.top + bodyPadding;
-        int bodyBottom = contentRect_.bottom - bodyPadding;
-        int leftWidth = (contentRect_.right - contentRect_.left - bodyPadding * 2) * 56 / 100;
-        int rightX = contentRect_.left + bodyPadding + leftWidth + gap;
-        int rightWidth = (contentRect_.right - contentRect_.left) - leftWidth - gap - bodyPadding * 2;
-        int searchHeight = 30;
-
-        MoveWindow(searchEdit_, contentRect_.left + bodyPadding, bodyTop, leftWidth, searchHeight, TRUE);
-        MoveWindow(rowList_, contentRect_.left + bodyPadding, bodyTop + searchHeight + 12, leftWidth,
-                   bodyBottom - bodyTop - searchHeight - 12, TRUE);
-
-        MoveWindow(selectedStatic_, rightX, bodyTop, rightWidth, 24, TRUE);
-        MoveWindow(detailEdit_, rightX, bodyTop + 30, rightWidth, 250, TRUE);
-        MoveWindow(typeStatic_, rightX, bodyTop + 292, rightWidth, 24, TRUE);
-        MoveWindow(valueEdit_, rightX, bodyTop + 322, rightWidth, 30, TRUE);
-        MoveWindow(applyButton_, rightX, bodyTop + 366, rightWidth, 38, TRUE);
-        MoveWindow(statusLabel_, margin, height - 52, width - margin * 2, 28, TRUE);
-    }
-
-    bool IsPrimaryButton(int id) const {
-        return id == IDC_BTN_AUTO_IMPORT || id == IDC_BTN_UNLOCK_ALL || id == IDC_BTN_APPLY;
-    }
-
-    bool IsTabButton(int id) const {
-        return id >= IDC_TAB_OVERVIEW && id <= IDC_TAB_OTHER;
-    }
-
-    int TabIndexFromId(int id) const {
-        return id - IDC_TAB_OVERVIEW;
-    }
-
-    COLORREF ControlBackdropForRect(const RECT& rect) const {
-        POINT center = { (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2 };
-        if (PtInRect(&headerRect_, center)) return RGB(34, 34, 38);
-        if (PtInRect(&contentRect_, center)) return RGB(34, 34, 38);
-        return gColors.panel;
-    }
-
-    void DrawRoundedPanel(HDC hdc, const RECT& rect, COLORREF fill, COLORREF border, int radius) {
-        HBRUSH fillBrush = CreateSolidBrush(fill);
-        HPEN pen = CreatePen(PS_SOLID, 1, border);
-        HGDIOBJ oldBrush = SelectObject(hdc, fillBrush);
-        HGDIOBJ oldPen = SelectObject(hdc, pen);
-        RoundRect(hdc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
-        SelectObject(hdc, oldBrush);
-        SelectObject(hdc, oldPen);
-        DeleteObject(fillBrush);
-        DeleteObject(pen);
-    }
-
-    LRESULT DrawControl(const DRAWITEMSTRUCT* dis) {
-        if (!dis) return FALSE;
-        UINT id = dis->CtlID;
-        HDC hdc = dis->hDC;
-        RECT rect = dis->rcItem;
-        bool selected = (dis->itemState & ODS_SELECTED) != 0;
-        bool disabled = (dis->itemState & ODS_DISABLED) != 0;
-
-        if (IsTabButton(id)) {
-            HBRUSH backdrop = CreateSolidBrush(ControlBackdropForRect(rect));
-            FillRect(hdc, &rect, backdrop);
-            DeleteObject(backdrop);
-
-            bool active = currentTab_ == TabIndexFromId(id);
-            COLORREF fill = active ? RGB(58, 60, 68) : RGB(34, 34, 40);
-            COLORREF border = active ? gColors.accentBright : RGB(62, 62, 72);
-            if (selected) fill = RGB(68, 70, 78);
-            DrawRoundedPanel(hdc, rect, fill, border, 16);
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, active ? gColors.text : RGB(210, 212, 218));
-            InflateRect(&rect, -8, 0);
-            wchar_t text[128] = {};
-            GetWindowTextW(dis->hwndItem, text, 127);
-            DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            return TRUE;
-        }
-
-        HBRUSH backdrop = CreateSolidBrush(ControlBackdropForRect(rect));
-        FillRect(hdc, &rect, backdrop);
-        DeleteObject(backdrop);
-
-        COLORREF fill = IsPrimaryButton(id) ? RGB(68, 72, 80) : RGB(42, 42, 48);
-        COLORREF border = IsPrimaryButton(id) ? RGB(168, 172, 180) : RGB(74, 74, 82);
-        if (selected) {
-            fill = IsPrimaryButton(id) ? RGB(88, 92, 100) : RGB(56, 56, 62);
-        }
-        if (disabled) {
-            fill = RGB(44, 40, 56);
-            border = RGB(70, 64, 88);
-        }
-
-        DrawRoundedPanel(hdc, rect, fill, border, 22);
-
-        wchar_t text[128] = {};
-        GetWindowTextW(dis->hwndItem, text, 127);
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, disabled ? gColors.textMuted : RGB(244, 244, 246));
-        SelectObject(hdc, uiFont_);
-        InflateRect(&rect, -8, 0);
-        DrawTextW(hdc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        return TRUE;
+        state_.status = L"Load failed.";
+        PublishState();
+        MessageBoxA(hwnd_, result->error.c_str(), "Load failed", MB_ICONERROR);
     }
 
     std::vector<UiRow> BuildRows() {
@@ -1749,7 +2037,8 @@ private:
 
                 UiRow row;
                 row.id = (currentTab_ == TAB_OVERVIEW ? "overview:" : "other:") + shortName;
-                row.selectedText = Utf8ToWide(shortName);
+                row.selectedText = HumanizeIdentifier(shortName);
+                row.rawName = Utf8ToWide(shortName);
                 row.typeName = PropertyTypeToWide(prop);
                 row.valueText = ValueToWideString(prop.value);
                 row.line = row.selectedText + L" = " + row.valueText;
@@ -1778,7 +2067,9 @@ private:
                     std::string itemName = std::get<std::string>(nameProp->value->data);
                     UiRow row;
                     row.id = "inventory:" + itemName;
-                    row.selectedText = Utf8ToWide(itemName);
+                    row.selectedText = FriendlyItemLabel(itemName);
+                    row.rawName = Utf8ToWide(itemName);
+                    row.noteText = L"Changing inventory also updates the linked level when one exists.";
                     row.typeName = L"int";
                     row.valueText = std::to_wstring(std::get<std::int32_t>(amountProp->value->data));
                     row.line = row.selectedText + L" = " + row.valueText;
@@ -1794,7 +2085,8 @@ private:
                     std::string key = std::get<std::string>(entry.key->data);
                     UiRow row;
                     row.id = "levels:" + key;
-                    row.selectedText = Utf8ToWide(key);
+                    row.selectedText = FriendlyLevelLabel(key);
+                    row.rawName = Utf8ToWide(key);
                     row.typeName = L"int";
                     row.valueText = std::to_wstring(std::get<std::int32_t>(entry.value->data));
                     std::wstring linked;
@@ -1802,6 +2094,7 @@ private:
                         Property* amountProp = FindInventoryAmountProp(state_.save, key.substr(0, key.size() - 3));
                         if (amountProp && IsIntValue(amountProp->value)) {
                             linked = L" | inventory " + std::to_wstring(std::get<std::int32_t>(amountProp->value->data));
+                            row.noteText = L"Linked inventory amount: " + std::to_wstring(std::get<std::int32_t>(amountProp->value->data));
                         }
                     }
                     row.line = row.selectedText + linked + L" = " + row.valueText;
@@ -1825,7 +2118,8 @@ private:
                         std::string upgradeName = std::get<std::string>(tweak.key->data);
                         UiRow row;
                         row.id = "upgrades:" + itemName + ":" + upgradeName;
-                        row.selectedText = Utf8ToWide(itemName) + L" / " + Utf8ToWide(upgradeName);
+                        row.selectedText = FriendlyItemLabel(itemName) + L" / " + HumanizeIdentifier(upgradeName);
+                        row.rawName = Utf8ToWide(itemName) + L" / " + Utf8ToWide(upgradeName);
                         row.typeName = L"int";
                         row.valueText = std::to_wstring(std::get<std::int32_t>(tweak.value->data));
                         row.line = row.selectedText + L" = " + row.valueText;
@@ -1847,7 +2141,8 @@ private:
                         if (IsScalarValue(prop.value)) {
                             UiRow row;
                             row.id = "jokers:" + itemName + ":" + shortName;
-                            row.selectedText = Utf8ToWide(itemName) + L" / " + Utf8ToWide(shortName);
+                            row.selectedText = FriendlyItemLabel(itemName) + L" / " + HumanizeIdentifier(shortName);
+                            row.rawName = Utf8ToWide(itemName) + L" / " + Utf8ToWide(shortName);
                             row.typeName = PropertyTypeToWide(prop);
                             row.valueText = ValueToWideString(prop.value);
                             row.line = row.selectedText + L" = " + row.valueText;
@@ -1860,7 +2155,8 @@ private:
                                 std::ostringstream id;
                                 id << "jokers:" << itemName << ":" << shortName << ":" << i;
                                 row.id = id.str();
-                                row.selectedText = Utf8ToWide(itemName) + L" / " + Utf8ToWide(shortName) + L"[" + std::to_wstring(static_cast<int>(i)) + L"]";
+                                row.selectedText = FriendlyItemLabel(itemName) + L" / " + HumanizeIdentifier(shortName) + L" [" + std::to_wstring(static_cast<int>(i) + 1) + L"]";
+                                row.rawName = Utf8ToWide(itemName) + L" / " + Utf8ToWide(shortName) + L"[" + std::to_wstring(static_cast<int>(i)) + L"]";
                                 row.typeName = L"name";
                                 row.valueText = ValueToWideString(arr->items[i]);
                                 row.line = row.selectedText + L" = " + row.valueText;
@@ -1879,7 +2175,8 @@ private:
                     std::ostringstream id;
                     id << "rewards:" << i;
                     row.id = id.str();
-                    row.selectedText = L"Reward " + std::to_wstring(static_cast<int>(i));
+                    row.selectedText = L"Reward " + std::to_wstring(static_cast<int>(i) + 1);
+                    row.rawName = L"rewardedChallenges[" + std::to_wstring(static_cast<int>(i)) + L"]";
                     row.typeName = L"name";
                     row.valueText = ValueToWideString(arr->items[i]);
                     row.line = row.selectedText + L" = " + row.valueText;
@@ -1893,48 +2190,24 @@ private:
     void PopulateList(const std::string& preserveId = "") {
         rows_ = BuildRows();
         filteredRows_.clear();
-        SendMessageW(rowList_, LB_RESETCONTENT, 0, 0);
-        int selectedIndex = -1;
+        std::string preferredId = preserveId.empty() ? selectedRowId_ : preserveId;
+        bool foundPreferred = false;
         for (size_t i = 0; i < rows_.size(); ++i) {
-            if (!ContainsCaseInsensitive(rows_[i].line + L" " + rows_[i].valueText, searchText_)) continue;
+            std::wstring haystack = rows_[i].line + L" " + rows_[i].valueText + L" " + rows_[i].rawName + L" " + rows_[i].noteText;
+            if (!ContainsCaseInsensitive(haystack, searchText_)) continue;
             filteredRows_.push_back(static_cast<int>(i));
-            int addedIndex = static_cast<int>(SendMessageW(rowList_, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(rows_[i].line.c_str())));
-            if (!preserveId.empty() && rows_[i].id == preserveId) {
-                selectedIndex = addedIndex;
+            if (!preferredId.empty() && rows_[i].id == preferredId) {
+                foundPreferred = true;
             }
         }
 
-        if (!filteredRows_.empty()) {
-            if (selectedIndex < 0) selectedIndex = 0;
-            SendMessageW(rowList_, LB_SETCURSEL, selectedIndex, 0);
+        if (foundPreferred) {
+            selectedRowId_ = preferredId;
+        } else if (!filteredRows_.empty()) {
+            selectedRowId_ = rows_[filteredRows_[0]].id;
+        } else {
+            selectedRowId_.clear();
         }
-        UpdateSelectionDetails();
-        SetWindowTextW(statusLabel_, state_.status.c_str());
-    }
-
-    UiRow* SelectedRow() {
-        int selected = static_cast<int>(SendMessageW(rowList_, LB_GETCURSEL, 0, 0));
-        if (selected == LB_ERR || selected < 0 || selected >= static_cast<int>(filteredRows_.size())) return NULL;
-        return &rows_[filteredRows_[selected]];
-    }
-
-    void UpdateSelectionDetails() {
-        UiRow* row = SelectedRow();
-        if (!row) {
-            SetWindowTextW(selectedStatic_, L"Selected");
-            SetWindowTextW(typeStatic_, L"Type");
-            SetWindowTextW(detailEdit_, L"No row selected.");
-            SetWindowTextW(valueEdit_, L"");
-            EnableWindow(valueEdit_, FALSE);
-            EnableWindow(applyButton_, FALSE);
-            return;
-        }
-        SetWindowTextW(selectedStatic_, (L"Selected: " + row->selectedText).c_str());
-        SetWindowTextW(typeStatic_, (L"Type: " + row->typeName).c_str());
-        SetWindowTextW(detailEdit_, (row->line + L"\r\n\r\nSave writes the current value back into the loaded FarFarWest save.").c_str());
-        SetWindowTextW(valueEdit_, row->valueText.c_str());
-        EnableWindow(valueEdit_, row->editable);
-        EnableWindow(applyButton_, row->editable);
     }
 
     bool SetOverviewValue(const std::string& shortName, const std::wstring& text) {
@@ -2039,12 +2312,9 @@ private:
         return parts;
     }
 
-    bool ApplyCurrentEdit() {
+    bool ApplyCurrentEdit(const std::wstring& text) {
         UiRow* row = SelectedRow();
         if (!row || !row->editable) return false;
-        wchar_t buffer[4096];
-        GetWindowTextW(valueEdit_, buffer, 4096);
-        std::wstring text = buffer;
         std::vector<std::string> parts = SplitId(row->id);
         bool changed = false;
         if (parts[0] == "overview" || parts[0] == "other") {
@@ -2063,36 +2333,14 @@ private:
         if (changed) {
             state_.status = L"Updated " + row->selectedText + L". Save to write the file.";
             PopulateList(row->id);
+            PublishState();
         }
         return changed;
     }
 
     void RefreshViews() {
-        wchar_t buffer[512];
-        GetWindowTextW(searchEdit_, buffer, 512);
-        searchText_ = buffer;
         PopulateList();
-    }
-
-    bool LoadSaveFile(const std::wstring& path) {
-        try {
-            std::wstring seed = SeedForSavePath(path);
-            ByteVec encrypted = ReadFileBytes(path);
-            state_.key = DeriveKey(seed);
-            ByteVec plain = DecryptSaveBytes(encrypted, state_.key);
-            state_.save = ParseGvas(plain);
-            state_.savePath = path;
-            state_.loaded = true;
-            state_.status = L"Loaded " + path;
-            SetWindowTextW(searchEdit_, L"");
-            RefreshViews();
-            return true;
-        } catch (const std::exception& ex) {
-            state_.status = L"Load failed.";
-            RefreshViews();
-            MessageBoxA(hwnd_, ex.what(), "Load failed", MB_ICONERROR);
-            return false;
-        }
+        PublishState();
     }
 
     bool SaveTo(const std::wstring& path, bool makeBackup) {
@@ -2120,7 +2368,7 @@ private:
             return true;
         } catch (const std::exception& ex) {
             state_.status = L"Save failed.";
-            RefreshViews();
+            PublishState();
             MessageBoxA(hwnd_, ex.what(), "Save failed", MB_ICONERROR);
             return false;
         }
@@ -2171,154 +2419,127 @@ private:
             return;
         }
         try {
-            UiRow* selected = SelectedRow();
-            std::string preserveId = selected ? selected->id : "";
             action();
             state_.status = std::wstring(actionName) + L" applied. Save to write the file.";
-            PopulateList(preserveId);
+            RefreshViews();
         } catch (const std::exception& ex) {
             MessageBoxA(hwnd_, ex.what(), "Action failed", MB_ICONERROR);
         }
     }
 
-    void HandleCommand(int id) {
-        switch (id) {
-        case IDC_BTN_OPEN: {
+    void HandleWebMessage(const std::wstring& message) {
+        if (message == L"ready") {
+            webViewReady_ = true;
+            RefreshViews();
+            return;
+        }
+        if (message == L"open") {
             std::optional<std::wstring> path = PickOpenPath();
             if (path.has_value()) {
-                pendingLoadPath_ = path.value();
-                PostMessageW(hwnd_, WM_APP_LOAD_SAVE, 0, 0);
+                BeginAsyncLoad(path.value());
             }
-            break;
+            return;
         }
-        case IDC_BTN_AUTO_IMPORT: {
+        if (message == L"autoImport") {
             std::optional<std::wstring> path = FindLatestSave();
             if (!path.has_value()) {
                 std::wstring message = L"No save found in:\n" + DefaultSaveDir();
                 MessageBoxW(hwnd_, message.c_str(), L"Save not found", MB_ICONINFORMATION);
-                break;
+                return;
             }
-            pendingLoadPath_ = path.value();
-            PostMessageW(hwnd_, WM_APP_LOAD_SAVE, 0, 0);
-            break;
+            BeginAsyncLoad(path.value());
+            return;
         }
-        case IDC_BTN_OPEN_FOLDER:
+        if (message == L"openFolder") {
             OpenDefaultSaveFolder();
-            break;
-        case IDC_BTN_SAVE:
+            return;
+        }
+        if (message == L"save") {
             if (state_.savePath.has_value()) SaveTo(state_.savePath.value(), true);
             else {
                 std::optional<std::wstring> path = PickSavePath();
                 if (path.has_value()) SaveTo(path.value(), PathFileExistsW(path.value().c_str()) != FALSE);
             }
-            break;
-        case IDC_BTN_SAVE_AS: {
+            return;
+        }
+        if (message == L"saveAs") {
             std::optional<std::wstring> path = PickSavePath();
             if (path.has_value()) SaveTo(path.value(), PathFileExistsW(path.value().c_str()) != FALSE);
-            break;
+            return;
         }
-        case IDC_BTN_WEAPON_100:
+        if (message == L"action:weapon100") {
             DoBulkAction(L"Weapon levels 100", [this]() { SetAllWeaponLevels(state_.save, 100); });
-            break;
-        case IDC_BTN_SPELL_100:
+            return;
+        }
+        if (message == L"action:spell100") {
             DoBulkAction(L"Spell levels 100", [this]() { SetAllSpellLevels(state_.save, 100); });
-            break;
-        case IDC_BTN_PRESTIGE_10:
+            return;
+        }
+        if (message == L"action:prestige10") {
             DoBulkAction(L"Weapon prestige 10", [this]() { EnsureWeaponPrestigeInventory(state_.save, 10); });
-            break;
-        case IDC_BTN_ADD_BUILDABLE:
+            return;
+        }
+        if (message == L"action:addBuildable") {
             DoBulkAction(L"Add missing buildable weapons", [this]() { AddMissingBuildableWeapons(state_.save); });
-            break;
-        case IDC_BTN_UNLOCK_ALL:
+            return;
+        }
+        if (message == L"action:unlockAll") {
             DoBulkAction(L"Unlock All", [this]() { UnlockAll(state_.save); });
-            break;
-        case IDC_BTN_APPLY:
-            ApplyCurrentEdit();
-            break;
-        default:
-            if (IsTabButton(id)) {
-                currentTab_ = TabIndexFromId(id);
-                for (HWND tab : tabButtons_) InvalidateRect(tab, NULL, TRUE);
+            return;
+        }
+        if (StartsWithWide(message, L"tab:")) {
+            int tab = _wtoi(message.c_str() + 4);
+            if (tab >= TAB_OVERVIEW && tab <= TAB_OTHER) {
+                currentTab_ = tab;
                 RefreshViews();
             }
-            break;
+            return;
+        }
+        if (StartsWithWide(message, L"filter:")) {
+            searchText_ = UrlDecodeComponent(message.substr(7));
+            RefreshViews();
+            return;
+        }
+        if (StartsWithWide(message, L"select:")) {
+            selectedRowId_ = WideToUtf8(UrlDecodeComponent(message.substr(7)));
+            PublishState();
+            return;
+        }
+        if (StartsWithWide(message, L"apply:")) {
+            ApplyCurrentEdit(UrlDecodeComponent(message.substr(6)));
+            return;
         }
     }
 
     void PaintBackground(HDC hdc) {
         RECT rect;
         GetClientRect(hwnd_, &rect);
-
-        TRIVERTEX verts[2] = {
-            { 0, 0, static_cast<COLOR16>(GetRValue(gColors.bgTop) << 8), static_cast<COLOR16>(GetGValue(gColors.bgTop) << 8), static_cast<COLOR16>(GetBValue(gColors.bgTop) << 8), 0xFFFF },
-            { rect.right, rect.bottom, static_cast<COLOR16>(GetRValue(gColors.bgBottom) << 8), static_cast<COLOR16>(GetGValue(gColors.bgBottom) << 8), static_cast<COLOR16>(GetBValue(gColors.bgBottom) << 8), 0xFFFF }
-        };
-        GRADIENT_RECT gradient = { 0, 1 };
-        GradientFill(hdc, verts, 2, &gradient, 1, GRADIENT_FILL_RECT_V);
+        HBRUSH bg = CreateSolidBrush(RGB(14, 14, 20));
+        FillRect(hdc, &rect, bg);
+        DeleteObject(bg);
 
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, gColors.text);
-        HFONT old = reinterpret_cast<HFONT>(SelectObject(hdc, titleFont_));
-        TextOutW(hdc, 20, 18, kWindowTitle, lstrlenW(kWindowTitle));
-        SelectObject(hdc, subtitleFont_);
-        SetTextColor(hdc, gColors.textMuted);
-        const wchar_t* subtitle = L"FarFarWest save editor with direct field editing, auto import, and quick bulk actions.";
-        TextOutW(hdc, 22, 56, subtitle, lstrlenW(subtitle));
-        SelectObject(hdc, old);
-
-        if (headerRect_.right > headerRect_.left) {
-            DrawRoundedPanel(hdc, headerRect_, RGB(34, 34, 38), RGB(66, 66, 74), 16);
-        }
-        if (contentRect_.right > contentRect_.left) {
-            DrawRoundedPanel(hdc, contentRect_, RGB(34, 34, 38), RGB(66, 66, 74), 16);
-        }
-    }
-
-    LRESULT HandleColorEdit(WPARAM wParam, LPARAM lParam) {
-        HDC hdc = reinterpret_cast<HDC>(wParam);
-        HWND control = reinterpret_cast<HWND>(lParam);
-        SetTextColor(hdc, gColors.text);
-        COLORREF bg = (control == rowList_) ? gColors.panelAlt : gColors.panel;
-        SetBkColor(hdc, bg);
-        return reinterpret_cast<LRESULT>(control == rowList_ ? panelAltBrush_ : panelBrush_);
+        SetTextColor(hdc, RGB(244, 244, 248));
+        DrawTextW(hdc, kWindowTitle, -1, &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+        RECT messageRect = rect;
+        messageRect.top += 40;
+        SetTextColor(hdc, RGB(168, 170, 184));
+        DrawTextW(hdc, paintMessage_.c_str(), -1, &messageRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
     }
 
     LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         switch (msg) {
         case WM_CREATE:
             ApplyWindowTheme();
-            CreateControls();
+            InitializeWebView();
             RefreshViews();
             return 0;
         case WM_SIZE:
-            LayoutControls(LOWORD(lParam), HIWORD(lParam));
+            ResizeWebView();
             return 0;
-        case WM_APP_LOAD_SAVE:
-            if (pendingLoadPath_.has_value()) {
-                std::wstring path = pendingLoadPath_.value();
-                pendingLoadPath_.reset();
-                LoadSaveFile(path);
-            }
+        case WM_APP_LOAD_COMPLETE:
+            FinishAsyncLoad(static_cast<unsigned int>(wParam), reinterpret_cast<AsyncLoadResult*>(lParam));
             return 0;
-        case WM_COMMAND:
-            if (LOWORD(wParam) == IDC_LIST_ROWS && HIWORD(wParam) == LBN_SELCHANGE) {
-                UpdateSelectionDetails();
-                return 0;
-            }
-            if (LOWORD(wParam) == IDC_EDIT_SEARCH && HIWORD(wParam) == EN_CHANGE) {
-                RefreshViews();
-                return 0;
-            }
-            if (HIWORD(wParam) == BN_CLICKED) {
-                HandleCommand(LOWORD(wParam));
-            }
-            return 0;
-        case WM_DRAWITEM:
-            return DrawControl(reinterpret_cast<DRAWITEMSTRUCT*>(lParam));
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX:
-            return HandleColorEdit(wParam, lParam);
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd_, &ps);
@@ -2327,11 +2548,9 @@ private:
             return 0;
         }
         case WM_DESTROY:
-            if (uiFont_) DeleteObject(uiFont_);
-            if (titleFont_) DeleteObject(titleFont_);
-            if (subtitleFont_) DeleteObject(subtitleFont_);
-            if (panelBrush_) DeleteObject(panelBrush_);
-            if (panelAltBrush_) DeleteObject(panelAltBrush_);
+            webView_ = nullptr;
+            webController_ = nullptr;
+            webEnvironment_ = nullptr;
             PostQuitMessage(0);
             return 0;
         default:
@@ -2343,6 +2562,8 @@ private:
 } // namespace ffw
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argv) {
@@ -2357,7 +2578,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     ffw::AppWindow app;
     if (!app.Create(hInstance)) {
         MessageBoxW(NULL, L"Unable to create the main window.", L"FarFarWest Unlock all tool", MB_ICONERROR);
+        CoUninitialize();
         return 1;
     }
-    return app.Run();
+    int code = app.Run();
+    CoUninitialize();
+    return code;
 }
