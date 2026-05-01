@@ -89,12 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.3
+            ## v1.4.4
 
             **What's new:**
-            - Fixed: local `build.bat` script — escaped parentheses inside the toolchain-error echo block (CMD was prematurely closing the `if (...)` block and aborting with a `"Set" cannot be processed syntactically` error)
-            - Fixed: local `build.bat` ships `libc++` and `libunwind` runtimes with the `.whl` extension when using the Windhawk Compiler fallback toolchain, matching the import names baked into the linked EXE
+- Fixed: WebView2 startup failures that reported `"The parameter is incorrect"` on some PCs by using the default WebView2 environment options during startup.
+- Improved: WebView2 startup errors now show the HRESULT and a clearer explanation when the runtime is missing, broken, or unable to create its data folder.
 
-            This release contains the same binary as v1.4.2; only the local build script was changed.
-
-            **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. No setup needed.
+            **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.

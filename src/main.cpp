@@ -1553,7 +1553,9 @@ static std::wstring UiAssetDir() {
 
 static std::wstring WebView2UserDataDir() {
     wchar_t localAppData[MAX_PATH];
-    SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, localAppData);
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, localAppData))) {
+        GetTempPathW(MAX_PATH, localAppData);
+    }
     return std::wstring(localAppData) + L"\\FarFarWestUnlockAllTool\\WebView2Data";
 }
 
@@ -1571,6 +1573,51 @@ static std::wstring HResultMessage(HRESULT hr) {
         message = out.str();
     }
     return Trim(message);
+}
+
+static std::wstring WebView2DownloadMessage() {
+    return L"\n\nInstall the Microsoft Edge WebView2 Runtime and start the tool again:\n"
+           L"https://developer.microsoft.com/microsoft-edge/webview2/";
+}
+
+static std::wstring DescribeWebView2Failure(HRESULT hr) {
+    std::wstring message = HResultMessage(hr);
+    message += L"\n\nError code: HRESULT 0x";
+    std::wostringstream code;
+    code << std::hex << std::uppercase << static_cast<unsigned long>(hr);
+    message += code.str();
+
+    if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
+        message += L"\n\nWebView2 Runtime was not found on this PC.";
+        message += WebView2DownloadMessage();
+    } else if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)) {
+        message += L"\n\nThe WebView2 data folder path points to an existing file instead of a folder.";
+    } else if (hr == HRESULT_FROM_WIN32(ERROR_PRODUCT_UNINSTALLED)) {
+        message += L"\n\nThe installed WebView2 Runtime appears to be broken or uninstalled.";
+        message += WebView2DownloadMessage();
+    } else if (hr == HRESULT_FROM_WIN32(ERROR_DISK_FULL)) {
+        message += L"\n\nWebView2 could not start because the disk is full or old runtime versions could not be cleaned up.";
+    } else if (hr == E_ACCESSDENIED) {
+        message += L"\n\nWebView2 could not create or write to its user data folder.";
+    } else if (hr == E_INVALIDARG || hr == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER)) {
+        message += L"\n\nWebView2 rejected one of the startup parameters.";
+    } else if (hr == E_FAIL) {
+        message += L"\n\nThe WebView2 Runtime was found, but the browser process could not start.";
+    }
+    return message;
+}
+
+static bool IsWebView2RuntimeAvailable(std::wstring* version, HRESULT* failure) {
+    LPWSTR versionInfo = NULL;
+    HRESULT hr = GetAvailableCoreWebView2BrowserVersionString(NULL, &versionInfo);
+    if (SUCCEEDED(hr) && versionInfo) {
+        if (version) *version = versionInfo;
+        CoTaskMemFree(versionInfo);
+        return true;
+    }
+    if (versionInfo) CoTaskMemFree(versionInfo);
+    if (failure) *failure = hr;
+    return false;
 }
 
 template <typename Interface>
@@ -1806,11 +1853,21 @@ private:
         paintMessage_ = L"Loading WebView2 environment...";
         InvalidateRect(hwnd_, NULL, TRUE);
 
+        HRESULT runtimeHr = S_OK;
+        if (!IsWebView2RuntimeAvailable(NULL, &runtimeHr)) {
+            std::wstring message = L"WebView2 Runtime is missing or unavailable.\n\n";
+            message += DescribeWebView2Failure(runtimeHr);
+            MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
+            paintMessage_ = L"WebView2 Runtime is missing.";
+            InvalidateRect(hwnd_, NULL, TRUE);
+            return;
+        }
+
         auto* environmentHandler = new EnvironmentCompletedHandler(
             [this](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT {
                 if (FAILED(result) || !environment) {
                     std::wstring message = L"WebView2 could not be initialized.\n\n";
-                    message += HResultMessage(result);
+                    message += DescribeWebView2Failure(result);
                     MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
                     paintMessage_ = L"WebView2 initialization failed.";
                     InvalidateRect(hwnd_, NULL, TRUE);
@@ -1822,7 +1879,7 @@ private:
                     [this](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT {
                         if (FAILED(controllerResult) || !controller) {
                             std::wstring message = L"WebView2 controller could not be created.\n\n";
-                            message += HResultMessage(controllerResult);
+                            message += DescribeWebView2Failure(controllerResult);
                             MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
                             paintMessage_ = L"WebView2 controller initialization failed.";
                             InvalidateRect(hwnd_, NULL, TRUE);
@@ -1873,7 +1930,7 @@ private:
                 controllerHandler->Release();
                 if (FAILED(controllerHr)) {
                     std::wstring message = L"WebView2 controller startup failed.\n\n";
-                    message += HResultMessage(controllerHr);
+                    message += DescribeWebView2Failure(controllerHr);
                     MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
                     paintMessage_ = L"WebView2 controller startup failed.";
                     InvalidateRect(hwnd_, NULL, TRUE);
@@ -1881,19 +1938,18 @@ private:
                 return controllerHr;
             });
 
-        auto* envOptions = new WebView2EnvironmentOptions();
         std::wstring userDataDir = WebView2UserDataDir();
+        SHCreateDirectoryExW(hwnd_, userDataDir.c_str(), NULL);
         HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
             NULL,
             userDataDir.c_str(),
-            envOptions,
+            NULL,
             environmentHandler);
-        envOptions->Release();
         environmentHandler->Release();
 
         if (FAILED(hr)) {
             std::wstring message = L"WebView2 startup call failed.\n\n";
-            message += HResultMessage(hr);
+            message += DescribeWebView2Failure(hr);
             MessageBoxW(hwnd_, message.c_str(), kWindowTitle, MB_ICONERROR);
             paintMessage_ = L"WebView2 startup call failed.";
             InvalidateRect(hwnd_, NULL, TRUE);
