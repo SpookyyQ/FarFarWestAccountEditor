@@ -430,6 +430,61 @@ static MetaInfoPtr ParseMeta(Reader& reader, const std::string& type) {
 static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInfoPtr& meta, std::int32_t size);
 static void WriteValue(Writer& writer, const std::string& type, const MetaInfoPtr& meta, const ValuePtr& value);
 
+static std::string HexNumber(size_t value, int width = 0) {
+    std::ostringstream out;
+    out << "0x" << std::uppercase << std::hex << std::setfill('0');
+    if (width > 0) out << std::setw(width);
+    out << value;
+    return out.str();
+}
+
+static std::string HexByte(unsigned char value) {
+    return HexNumber(static_cast<size_t>(value), 2);
+}
+
+static std::string BytePreview(const ByteVec& bytes, size_t at, size_t radius = 8) {
+    if (bytes.empty()) return "";
+    size_t start = at > radius ? at - radius : 0;
+    size_t end = std::min(bytes.size(), at + radius + 1);
+    std::ostringstream out;
+    for (size_t i = start; i < end; ++i) {
+        if (i > start) out << ' ';
+        if (i == at) out << '[';
+        out << std::uppercase << std::hex << std::setfill('0') << std::setw(2)
+            << static_cast<int>(bytes[i]);
+        if (i == at) out << ']';
+    }
+    return out.str();
+}
+
+static std::string InvalidPropertyTerminatorMessage(
+    const std::string& name,
+    const std::string& type,
+    size_t nameOffset,
+    size_t typeOffset,
+    size_t metaOffset,
+    size_t sizeOffset,
+    size_t terminatorOffset,
+    std::int32_t declaredSize,
+    unsigned char found,
+    const ByteVec& bytes) {
+    std::ostringstream out;
+    out << "Invalid property terminator\n\n"
+        << "Property name: " << name << "\n"
+        << "Property type: " << type << "\n"
+        << "Declared value size: " << declaredSize << "\n\n"
+        << "Name offset: " << HexNumber(nameOffset) << "\n"
+        << "Type offset: " << HexNumber(typeOffset) << "\n"
+        << "Meta offset: " << HexNumber(metaOffset) << "\n"
+        << "Size offset: " << HexNumber(sizeOffset) << "\n"
+        << "Terminator offset: " << HexNumber(terminatorOffset) << "\n\n"
+        << "Expected terminator: 0x00\n"
+        << "Found: " << HexByte(found) << "\n"
+        << "Bytes around terminator: " << BytePreview(bytes, terminatorOffset) << "\n\n"
+        << "Please send this full message together with the failing .save file.";
+    return out.str();
+}
+
 static ValuePtr ReadInlineValue(Reader& reader, const std::string& type, const MetaInfoPtr& meta) {
     if (type == "IntProperty") {
         ValuePtr value(new Value());
@@ -494,17 +549,32 @@ static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInf
     return value;
 }
 
-static Property ReadProperty(Reader& reader, const std::string& name) {
+static Property ReadProperty(Reader& reader, const std::string& name, size_t nameOffset) {
     Property property;
     property.name = name;
+    size_t typeOffset = reader.pos;
     property.type = reader.FString();
     size_t metaStart = reader.pos;
     property.meta = ParseMeta(reader, property.type);
     property.metaRaw.assign(reader.buffer->begin() + static_cast<long long>(metaStart),
                             reader.buffer->begin() + static_cast<long long>(reader.pos));
+    size_t sizeOffset = reader.pos;
     std::int32_t size = reader.I32();
+    size_t terminatorOffset = reader.pos;
     unsigned char terminator = reader.U8();
-    if (terminator != 0) throw std::runtime_error("Invalid property terminator");
+    if (terminator != 0) {
+        throw std::runtime_error(InvalidPropertyTerminatorMessage(
+            property.name,
+            property.type,
+            nameOffset,
+            typeOffset,
+            metaStart,
+            sizeOffset,
+            terminatorOffset,
+            size,
+            terminator,
+            *reader.buffer));
+    }
     size_t valueStart = reader.pos;
     property.value = ReadValue(reader, property.type, property.meta, size);
     size_t consumed = reader.pos - valueStart;
@@ -517,9 +587,10 @@ static Property ReadProperty(Reader& reader, const std::string& name) {
 static std::vector<Property> ReadProperties(Reader& reader) {
     std::vector<Property> props;
     while (true) {
+        size_t nameOffset = reader.pos;
         std::string name = reader.FString();
         if (name == "None") break;
-        props.push_back(ReadProperty(reader, name));
+        props.push_back(ReadProperty(reader, name, nameOffset));
     }
     return props;
 }

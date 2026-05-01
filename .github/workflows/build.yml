@@ -89,10 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.5
+            ## v1.4.6
 
             **What's new:**
-            - Fixed: WebView2 startup failures that reported `"The parameter is incorrect"` on some PCs by using the default WebView2 environment options during startup.
-            - Improved: WebView2 startup errors now show the HRESULT and a clearer explanation when the runtime is missing, broken, or unable to create its data folder.
+            - Improved: save parser errors now include the property name, property type, byte offsets, expected/found terminator byte, and a small hex preview.
+            - This should make `"Invalid property terminator"` reports actionable without guessing where the parser failed.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.
