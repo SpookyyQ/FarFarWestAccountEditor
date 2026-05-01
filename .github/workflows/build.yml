@@ -89,9 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.0
+            ## v1.4.1
 
             **What's new:**
-            - Fixed: WebView2 background networking disabled — the app no longer makes external connections at startup (telemetry, Safe Browsing, sync services)
+            - Fixed: save files containing EnumProperty or ByteProperty fields now load correctly (previously caused "invalid property terminator" error)
+            - Fixed: WebView2 background networking disabled — the app no longer makes external connections at startup
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. No setup needed.
