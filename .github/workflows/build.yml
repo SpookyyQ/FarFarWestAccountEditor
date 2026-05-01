@@ -29,10 +29,38 @@ jobs:
           Move-Item $inner.FullName C:\llvm-mingw
 
       - name: Build
-        shell: cmd
-        env:
-          LLVM_MINGW: C:\llvm-mingw
-        run: build.bat
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root   = $env:GITHUB_WORKSPACE
+          $clang  = "C:\llvm-mingw\bin\clang++.exe"
+          $tBin   = "C:\llvm-mingw\x86_64-w64-mingw32\bin"
+          $out    = "$root\build"
+          $exe    = "$out\FarFarWest Unlock all tool.exe"
+          $wv2Inc = "$root\third_party_webview2\build\native\include"
+          $wv2Lib = "$root\third_party_webview2\build\native\x64\WebView2Loader.dll.lib"
+          $wv2Dll = "$root\third_party_webview2\build\native\x64\WebView2Loader.dll"
+
+          New-Item -ItemType Directory -Force $out | Out-Null
+
+          & powershell -ExecutionPolicy Bypass -File "$root\make_icon_res.ps1" -OutRes "$out\app.res"
+          if ($LASTEXITCODE) { throw "Icon generation failed" }
+
+          & $clang --target=x86_64-w64-windows-gnu -std=c++20 -O2 -municode -mwindows `
+            "-I$wv2Inc" "$root\src\main.cpp" $wv2Lib "$out\app.res" `
+            '-o' $exe `
+            -lcomctl32 -lshell32 -lshlwapi -ldwmapi -lbcrypt -lole32 -loleaut32 -luuid -lmsimg32
+          if ($LASTEXITCODE) { throw "Compilation failed" }
+
+          Copy-Item "$tBin\libc++.dll"           $out
+          Copy-Item "$tBin\libunwind.dll"         $out
+          Copy-Item "$tBin\libwinpthread-1.dll"   $out
+          Copy-Item $wv2Dll                       $out
+
+          if (Test-Path "$out\ui") { Remove-Item "$out\ui" -Recurse -Force }
+          Copy-Item "$root\assets\ui" "$out\ui" -Recurse
+
+          Write-Host "Built: $exe"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -60,3 +88,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
+          body: |
+            ## v1.3.1
+
+            Hotfix release.
+
+            **What's new:**
+            - Fixed automated build pipeline (GitHub Actions)
+            - Build system no longer requires Windhawk — any LLVM-MinGW installation works
+            - Includes all changes from v1.3: open source release, credits, real screenshots in README
+
+            **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. No setup needed.
