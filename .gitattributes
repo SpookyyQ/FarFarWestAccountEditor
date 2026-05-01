@@ -1,0 +1,2 @@
+third_party_webview2/ linguist-vendored
+*.bat text eol=crlf
