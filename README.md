@@ -10,6 +10,12 @@ This project rewrites the earlier tool as a standalone desktop app built with Wi
 
 ![In-game result after editing](docs/images/screenshot-ingame-result.png)
 
+## Highlighted Fields
+
+The most useful fields for the majority of players — like **Gold**, **Souls**, and character **level** — are visually highlighted in the field list so you can find them instantly without scrolling through everything.
+
+![Highlighted fields: Gold, Souls, and more](docs/images/screenshot-highlighted-fields.png)
+
 ## Highlights
 
 - Native Windows `.exe` with a custom WebView2 UI
