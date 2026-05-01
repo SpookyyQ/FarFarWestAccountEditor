@@ -89,9 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.8
+            ## v1.4.9
 
             **What's new:**
+            - Fix: "Unlock All" no longer adds new inventory items or challenge entries. It now only updates values that already exist in your save, preventing save file corruption that some users experienced after pressing "Unlock All".
             - Fix: save files containing blueprint properties with a PropertyGuid tag (e.g. `specialWeaponElement_68_…`) now load correctly instead of failing with `"Invalid property terminator"`. The PropertyGuid bytes are preserved on write so save files round-trip without data loss.
             - The app version is now shown in the UI header and always reflects the current release.
 

@@ -1385,11 +1385,24 @@ static int SetAllSpellLevels(SaveFile& save, int level) {
 
 static void UnlockAll(SaveFile& save) {
     SetAllWeaponLevels(save, 100);
-    EnsureWeaponPrestigeInventory(save, 10);
-    EnsureChallengeItem(save, "Prestige", 10);
-    EnsureChallengeItem(save, "itemHeroLvl", 100);
-    SetOrAddInventoryAmount(save, "moneySoul", 300000);
-    SetOrAddInventoryAmount(save, "moneyGold", 9999999);
+
+    for (size_t i = 0; i < sizeof(kBuildableWeapons) / sizeof(kBuildableWeapons[0]); ++i) {
+        std::string prestigeName = WideToUtf8(kBuildableWeapons[i]) + "Prestige";
+        Property* p = FindInventoryAmountProp(save, prestigeName);
+        if (p) p->value->data = static_cast<std::int32_t>(10);
+    }
+
+    MapEntry* prestige = FindChallengeEntry(save, "Prestige");
+    if (prestige) prestige->value->data = static_cast<std::int32_t>(10);
+
+    MapEntry* heroLvl = FindChallengeEntry(save, "itemHeroLvl");
+    if (heroLvl) heroLvl->value->data = static_cast<std::int32_t>(100);
+
+    Property* soul = FindInventoryAmountProp(save, "moneySoul");
+    if (soul) soul->value->data = static_cast<std::int32_t>(300000);
+
+    Property* gold = FindInventoryAmountProp(save, "moneyGold");
+    if (gold) gold->value->data = static_cast<std::int32_t>(9999999);
 }
 
 static std::wstring DefaultSaveDir() {
