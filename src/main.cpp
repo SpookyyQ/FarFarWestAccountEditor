@@ -390,6 +390,7 @@ struct Property {
     std::string type;
     MetaInfoPtr meta;
     ByteVec metaRaw;
+    ByteVec guidRaw;  // HasPropertyGuid (U8) + optional 16-byte PropertyGuid
     ValuePtr value;
     ByteVec valueTrailing;
     std::optional<ByteVec> rawOverride;
@@ -561,19 +562,24 @@ static Property ReadProperty(Reader& reader, const std::string& name, size_t nam
     size_t sizeOffset = reader.pos;
     std::int32_t size = reader.I32();
     size_t terminatorOffset = reader.pos;
-    unsigned char terminator = reader.U8();
-    if (terminator != 0) {
-        throw std::runtime_error(InvalidPropertyTerminatorMessage(
-            property.name,
-            property.type,
-            nameOffset,
-            typeOffset,
-            metaStart,
-            sizeOffset,
-            terminatorOffset,
-            size,
-            terminator,
-            *reader.buffer));
+    unsigned char hasPropertyGuid = reader.U8();
+    property.guidRaw.push_back(hasPropertyGuid);
+    if (hasPropertyGuid) {
+        if (reader.pos + 16 > reader.buffer->size()) {
+            throw std::runtime_error(InvalidPropertyTerminatorMessage(
+                property.name,
+                property.type,
+                nameOffset,
+                typeOffset,
+                metaStart,
+                sizeOffset,
+                terminatorOffset,
+                size,
+                hasPropertyGuid,
+                *reader.buffer));
+        }
+        ByteVec guid = reader.ReadBytes(16);
+        property.guidRaw.insert(property.guidRaw.end(), guid.begin(), guid.end());
     }
     size_t valueStart = reader.pos;
     property.value = ReadValue(reader, property.type, property.meta, size);
@@ -675,7 +681,11 @@ static void WriteProperty(Writer& writer, const Property& property) {
         : WriteValueBytes(property.type, property.meta, property.value, property.valueTrailing);
     writer.WriteBytes(property.metaRaw);
     writer.WriteI32(static_cast<std::int32_t>(payload.size()));
-    writer.WriteU8(0);
+    if (!property.guidRaw.empty()) {
+        writer.WriteBytes(property.guidRaw);
+    } else {
+        writer.WriteU8(0);
+    }
     writer.WriteBytes(payload);
 }
 
