@@ -83,7 +83,7 @@ function renderRows() {
   state.rows.forEach((row) => {
     const card = document.createElement("button");
     card.type = "button";
-    card.className = `row-card${state.selected?.id === row.id ? " active" : ""}`;
+    card.className = `row-card${state.selected?.id === row.id ? " active" : ""}${row.featured ? " featured" : ""}`;
     card.innerHTML = `
       <span class="row-title">${escapeHtml(row.label)}</span>
       <span class="row-inline-meta">

@@ -422,6 +422,21 @@ input {
   background: linear-gradient(135deg, rgba(52, 41, 101, 0.95), rgba(28, 29, 48, 0.96));
 }
 
+
+.row-card.featured {
+  border-color: rgba(224, 172, 48, 0.35);
+  background: linear-gradient(135deg, rgba(40, 34, 18, 0.98), rgba(26, 28, 40, 0.98));
+}
+
+.row-card.featured .row-title {
+  color: #e8b832;
+}
+
+.row-card.featured.active {
+  border-color: rgba(224, 172, 48, 0.7);
+  background: linear-gradient(135deg, rgba(64, 50, 14, 0.96), rgba(32, 29, 42, 0.97));
+}
+
 .row-title {
   margin: 0;
   color: var(--text);

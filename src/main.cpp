@@ -1399,6 +1399,7 @@ struct UiRow {
     std::wstring typeName;
     std::wstring valueText;
     bool editable = true;
+    bool featured = false;
 };
 
 struct AsyncLoadResult {
@@ -1940,7 +1941,8 @@ private:
             out << "\"type\":" << JsonString(row.typeName) << ",";
             out << "\"rawName\":" << JsonString(row.rawName) << ",";
             out << "\"note\":" << JsonString(row.noteText) << ",";
-            out << "\"editable\":" << (row.editable ? "true" : "false");
+            out << "\"editable\":" << (row.editable ? "true" : "false") << ",";
+            out << "\"featured\":" << (row.featured ? "true" : "false");
             out << "}";
         }
         out << "],";
@@ -2075,6 +2077,7 @@ private:
                     row.typeName = L"int";
                     row.valueText = std::to_wstring(std::get<std::int32_t>(amountProp->value->data));
                     row.line = row.selectedText + L" = " + row.valueText;
+                    row.featured = (itemName == "moneyGold" || itemName == "moneySoul" || itemName == "itemHeroPrestige");
                     out.push_back(row);
                 }
             }
@@ -2100,6 +2103,7 @@ private:
                         }
                     }
                     row.line = row.selectedText + linked + L" = " + row.valueText;
+                    row.featured = (key == "itemHeroLvl");
                     out.push_back(row);
                 }
             }
