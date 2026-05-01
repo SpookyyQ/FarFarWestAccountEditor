@@ -89,11 +89,12 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.9
+            ## v1.4.10
 
             **What's new:**
-            - Fix: "Unlock All" no longer adds new inventory items or challenge entries. It now only updates values that already exist in your save, preventing save file corruption that some users experienced after pressing "Unlock All".
-            - Fix: save files containing blueprint properties with a PropertyGuid tag (e.g. `specialWeaponElement_68_…`) now load correctly instead of failing with `"Invalid property terminator"`. The PropertyGuid bytes are preserved on write so save files round-trip without data loss.
-            - The app version is now shown in the UI header and always reflects the current release.
+            - Fix: save files with unexpected `StructProperty`, `ArrayProperty`, or `MapProperty` layouts now fall back to raw round-trip preservation instead of failing during load with `"Unexpected end of file"`.
+            - Fix: raw-fallback save data is now written back correctly, preventing `bad_variant_access` during round-trip tests and save writes.
+            - Fix: local release packaging now copies the correct runtime filenames for Windhawk-based builds.
+            - The app version shown in the UI now matches this release.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.

@@ -36,7 +36,7 @@ static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
-static const char* kAppVersion = "1.4.7";
+static const char* kAppVersion = "1.4.10";
 
 static const wchar_t* kBuildableWeapons[] = {
     L"itemBoomerang",
