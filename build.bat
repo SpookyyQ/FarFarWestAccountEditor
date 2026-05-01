@@ -33,8 +33,8 @@ if not defined TOOLCHAIN_ROOT (
     echo   https://github.com/mstorsjo/llvm-mingw/releases
     echo.
     echo Extract the ZIP to a folder and either:
-    echo   a) Set the LLVM_MINGW environment variable to that folder, or
-    echo   b) Extract to one of these paths:
+    echo   a^) Set the LLVM_MINGW environment variable to that folder, or
+    echo   b^) Extract to one of these paths:
     echo        C:\llvm-mingw
     echo        C:\tools\llvm-mingw
     echo.
@@ -59,8 +59,9 @@ if errorlevel 1 exit /b 1
 
 if errorlevel 1 exit /b 1
 
-copy /Y "%LIBCXX%" "%OUTDIR%\libc++.dll" >nul
-copy /Y "%LIBUNWIND%" "%OUTDIR%\libunwind.dll" >nul
+rem Windhawk toolchain links libc++ and libunwind with .whl extension in the import table
+copy /Y "%LIBCXX%" "%OUTDIR%\libc++.whl" >nul
+copy /Y "%LIBUNWIND%" "%OUTDIR%\libunwind.whl" >nul
 copy /Y "%LIBWINPTHREAD%" "%OUTDIR%\libwinpthread-1.dll" >nul
 copy /Y "%WV2DLL%" "%OUTDIR%\WebView2Loader.dll" >nul
 if exist "%OUTDIR%\ui" rmdir /S /Q "%OUTDIR%\ui"

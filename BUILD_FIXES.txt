@@ -1,0 +1,247 @@
+================================================================
+BUILD-FIXES FÜR FarFarWest Unlock all tool 1.3.1
+================================================================
+Datum: 2026-05-01
+Umgebung: Windows 11 Pro, Toolchain: C:\Program Files\Windhawk\Compiler
+================================================================
+
+
+PROBLEM 1: build.bat tat scheinbar nichts beim Ausführen
+--------------------------------------------------------
+
+SYMPTOM
+-------
+Doppelklick auf build.bat -> Fenster blitzt kurz auf und schliesst sich
+sofort wieder, kein Output, keine EXE wird gebaut.
+
+URSACHE
+-------
+Die Datei build.bat war mit Unix-Zeilenenden gespeichert (LF, Byte 0x0A)
+statt Windows-Zeilenenden (CRLF, Bytes 0x0D 0x0A).
+
+Verifiziert durch Hex-Dump der ersten Bytes:
+  40 65 63 68 6F 20 6F 66 66 0A   <- @echo off + LF (statt CRLF)
+
+CMD.exe kann mehrzeilige Konstrukte wie
+
+    if defined LLVM_MINGW (
+        if exist "..." set TOOLCHAIN_ROOT=...
+    )
+
+bei reinem LF nicht korrekt parsen. Das fuehrt zu unvorhersehbarem
+Verhalten und ggf. sofortigem Abbruch.
+
+Betroffene Dateien (alle hatten LF):
+  - build.bat            (2682 Bytes, 0 CRLF)
+  - package_release.bat  (1204 Bytes, 0 CRLF)
+  - make_icon_res.ps1    (1986 Bytes, 0 CRLF)
+
+LÖSUNG
+------
+Alle drei Dateien auf CRLF konvertiert. PowerShell-Befehl zum
+Konvertieren (zur Wiederholung falls noetig):
+
+    $files = @("build.bat","package_release.bat","make_icon_res.ps1")
+    foreach ($f in $files) {
+        $path = "$f"
+        $text = [System.IO.File]::ReadAllText($path)
+        $text = $text -replace "`r`n","`n"
+        $text = $text -replace "`n","`r`n"
+        [System.IO.File]::WriteAllText($path, $text,
+            (New-Object System.Text.UTF8Encoding($false)))
+    }
+
+Resultat nach Konvertierung:
+  - build.bat            (2751 Bytes, 69 CRLF)
+  - package_release.bat  (1235 Bytes, 31 CRLF)
+  - make_icon_res.ps1    (2054 Bytes, 68 CRLF)
+
+
+================================================================
+
+
+PROBLEM 2: Syntaxfehler "Set" beim Ausfuehren von build.bat
+-----------------------------------------------------------
+
+SYMPTOM
+-------
+Auch nach dem CRLF-Fix kam der Fehler:
+
+  "Set" kann syntaktisch an dieser Stelle nicht verarbeitet werden.
+
+ExitCode 255, kein Build.
+
+URSACHE
+-------
+In Zeilen 36 und 37 der build.bat standen INNERHALB eines
+mehrzeiligen if-Blocks unescaped Klammern in einem echo-Befehl:
+
+    if not defined TOOLCHAIN_ROOT (
+        echo.
+        echo ERROR: No compatible toolchain found.
+        ...
+        echo   a) Set the LLVM_MINGW environment variable...   <-- )
+        echo   b) Extract to one of these paths:               <-- )
+        ...
+        exit /b 1
+    )
+
+CMD interpretiert die ")" hinter "a" und "b" als Ende des
+if-Blocks. Anschliessend versucht CMD "Set the LLVM_MINGW..." als
+neuen Befehl zu parsen -> Syntaxfehler.
+
+LÖSUNG
+------
+Klammern mit Caret "^" escapen:
+
+    echo   a^) Set the LLVM_MINGW environment variable to that folder, or
+    echo   b^) Extract to one of these paths:
+
+Das ^ verhindert die Interpretation als Block-Ende, aber wird selbst
+nicht ausgegeben.
+
+
+================================================================
+
+
+PROBLEM 3: EXE startet nicht - "libc++.whl nicht gefunden"
+----------------------------------------------------------
+
+SYMPTOM
+-------
+Nach erfolgreichem Build erscheinen beim Doppelklick auf
+"FarFarWest Unlock all tool.exe" zwei Fehlermeldungen:
+
+  "Die Ausfuehrung des Codes kann nicht fortgesetzt werden,
+   da libc++.whl nicht gefunden wurde."
+
+  "Die Ausfuehrung des Codes kann nicht fortgesetzt werden,
+   da libunwind.whl nicht gefunden wurde."
+
+URSACHE (interessant!)
+----------------------
+Die Endung ".whl" (nicht ".dll") ist KEIN Tippfehler. Der
+Windhawk-Compiler (Fallback-Toolchain in build.bat) hat seine
+Import-Bibliotheken so praepariert, dass der Linker im PE-Import-
+Eintrag der EXE die DLL-Namen mit ".whl" Endung schreibt:
+
+Suche im Inhalt der EXE:
+  __imp__ZNSt3__116__libcpp_tls_setElPv
+  libc++.whl       <-- so wird die DLL referenziert
+  libunwind.whl    <-- so wird die DLL referenziert
+
+Verifiziert durch Inspektion der Windhawk-Import-Libs:
+  C:\Program Files\Windhawk\Compiler\x86_64-w64-mingw32\lib\libc++.dll.a
+    -> enthaelt String "libc++.whl"
+  C:\Program Files\Windhawk\Compiler\x86_64-w64-mingw32\lib\libunwind.dll.a
+    -> enthaelt String "libunwind.whl"
+  C:\Program Files\Windhawk\Compiler\x86_64-w64-mingw32\lib\libwinpthread.dll.a
+    -> enthaelt String "libwinpthread-1.dll" (normal!)
+
+Hintergrund: Windhawk ist eine Modding-Plattform. Module/Mods werden
+mit Endung ".whl" geliefert, damit der Windhawk-Loader sie erkennt
+und sie nicht mit normalen System-DLLs kollidieren. Die Import-Libs
+des Compilers wurden entsprechend gepatcht.
+
+Das build.bat kopierte die Runtime-Dateien aber als ".dll" - die EXE
+sucht aber ".whl".
+
+LÖSUNG
+------
+In build.bat die Kopier-Schritte auf ".whl" anpassen:
+
+  Vorher:
+    copy /Y "%LIBCXX%"     "%OUTDIR%\libc++.dll"        >nul
+    copy /Y "%LIBUNWIND%"  "%OUTDIR%\libunwind.dll"     >nul
+    copy /Y "%LIBWINPTHREAD%" "%OUTDIR%\libwinpthread-1.dll" >nul
+
+  Nachher:
+    rem Windhawk toolchain links libc++ and libunwind with .whl extension in the import table
+    copy /Y "%LIBCXX%"     "%OUTDIR%\libc++.whl"        >nul
+    copy /Y "%LIBUNWIND%"  "%OUTDIR%\libunwind.whl"     >nul
+    copy /Y "%LIBWINPTHREAD%" "%OUTDIR%\libwinpthread-1.dll" >nul
+
+(libwinpthread-1.dll bleibt ".dll", da die zugehoerige Import-Lib
+korrekt auf ".dll" verweist.)
+
+
+================================================================
+
+
+ALTERNATIVE LÖSUNGEN (nicht angewendet, nur zur Info)
+-----------------------------------------------------
+
+A) Andere Toolchain verwenden
+   build.bat sucht zuerst nach einer "echten" llvm-mingw Installation
+   in folgender Reihenfolge:
+
+     %LLVM_MINGW%\bin\clang++.exe        (Umgebungsvariable)
+     C:\llvm-mingw\bin\clang++.exe
+     C:\tools\llvm-mingw\bin\clang++.exe
+     %LOCALAPPDATA%\llvm-mingw\bin\clang++.exe
+     C:\Program Files\LLVM-MinGW\bin\clang++.exe
+     C:\Program Files\Windhawk\Compiler\bin\clang++.exe   (Fallback)
+
+   Mit einer normalen llvm-mingw von
+   https://github.com/mstorsjo/llvm-mingw/releases
+   waeren die DLLs als ".dll" im Import-Eintrag und alles haette auf
+   Anhieb funktioniert. Empfehlung fuer saubere Builds: ZIP nach
+   C:\llvm-mingw entpacken.
+
+B) Statisches Linken
+   Mit "-static -static-libstdc++ -stdlib=libc++" am Linker-Aufruf
+   liessen sich libc++/libunwind in die EXE einbacken. Dann braucht
+   man die DLLs gar nicht. Vorteil: nur eine EXE. Nachteil: groesser,
+   ggf. lizenzrechtliche Punkte beachten.
+
+
+================================================================
+
+
+FINALE BUILD-DATEIEN (Stand nach Fix)
+-------------------------------------
+build/
+  FarFarWest Unlock all tool.exe   (490.496 Bytes)
+  WebView2Loader.dll               (159.344 Bytes)
+  libc++.whl                     (2.110.976 Bytes)
+  libunwind.whl                    (216.064 Bytes)
+  libwinpthread-1.dll              (364.544 Bytes)
+  app.res                           (76.908 Bytes)
+  ui/                              (UI-Assets)
+
+
+GEAENDERTE DATEIEN
+------------------
+  build.bat
+    - LF -> CRLF konvertiert
+    - Zeile 36: "a)" -> "a^)"
+    - Zeile 37: "b)" -> "b^)"
+    - Copy-Befehle: libc++.dll/libunwind.dll -> libc++.whl/libunwind.whl
+
+  package_release.bat
+    - LF -> CRLF konvertiert
+
+  make_icon_res.ps1
+    - LF -> CRLF konvertiert
+
+
+SCHNELL-PRÜFUNG (falls Probleme wiederkommen)
+---------------------------------------------
+1. Zeilenenden pruefen:
+   PowerShell:
+     $b = [System.IO.File]::ReadAllBytes("build.bat")
+     $b[8..10] | %{ $_.ToString('X2') }
+   Erwartet: 66 0D 0A (statt 66 6F 0A)
+
+2. EXE-Imports inspizieren:
+   PowerShell:
+     $b = [System.IO.File]::ReadAllBytes("build\FarFarWest Unlock all tool.exe")
+     $t = [Text.Encoding]::ASCII.GetString($b)
+     [regex]::Matches($t,'[A-Za-z0-9_\-+\.]+\.(dll|whl)') |
+       %{ $_.Value } | Sort -Unique
+
+3. Wenn EXE nicht startet -> erforderliche DLLs/whls neben der EXE?
+
+================================================================
+ENDE
+================================================================

@@ -89,11 +89,12 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.2
+            ## v1.4.3
 
             **What's new:**
-            - Fixed: WebView2 no longer fails to start ("Catastrophic failure" / "can't read to data folder") when the tool is run from a protected or special-character path — user data is now stored in %LOCALAPPDATA%\FarFarWestUnlockAllTool\WebView2Data
-            - Fixed: save files containing EnumProperty or ByteProperty fields now load correctly (previously caused "invalid property terminator" error)
-            - Fixed: WebView2 background networking disabled — the app no longer makes external connections at startup
+            - Fixed: local `build.bat` script — escaped parentheses inside the toolchain-error echo block (CMD was prematurely closing the `if (...)` block and aborting with a `"Set" cannot be processed syntactically` error)
+            - Fixed: local `build.bat` ships `libc++` and `libunwind` runtimes with the `.whl` extension when using the Windhawk Compiler fallback toolchain, matching the import names baked into the linked EXE
+
+            This release contains the same binary as v1.4.2; only the local build script was changed.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. No setup needed.
