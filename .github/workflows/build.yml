@@ -89,10 +89,9 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.6
+            ## v1.4.7
 
             **What's new:**
-            - Improved: save parser errors now include the property name, property type, byte offsets, expected/found terminator byte, and a small hex preview.
-            - This should make `"Invalid property terminator"` reports actionable without guessing where the parser failed.
+            - Fix: save files containing blueprint properties with a PropertyGuid tag (e.g. `specialWeaponElement_68_…`) now load correctly instead of failing with `"Invalid property terminator"`. The PropertyGuid bytes are preserved on write so save files round-trip without data loss.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.
