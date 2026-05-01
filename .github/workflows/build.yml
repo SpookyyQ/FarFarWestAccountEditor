@@ -89,13 +89,9 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.3.1
-
-            Hotfix release.
+            ## v1.4.0
 
             **What's new:**
-            - Fixed automated build pipeline (GitHub Actions)
-            - Build system no longer requires Windhawk — any LLVM-MinGW installation works
-            - Includes all changes from v1.3: open source release, credits, real screenshots in README
+            - Fixed: WebView2 background networking disabled — the app no longer makes external connections at startup (telemetry, Safe Browsing, sync services)
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. No setup needed.
