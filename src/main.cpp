@@ -408,6 +408,10 @@ static MetaInfoPtr ParseMeta(Reader& reader, const std::string& type) {
         reader.I32();
         return meta;
     }
+    if (type == "EnumProperty" || type == "ByteProperty") {
+        meta->innerType = reader.FString();
+        return meta;
+    }
     if (type == "ArrayProperty") {
         meta->innerType = reader.FString();
         meta->innerMeta = ParseMeta(reader, meta->innerType);
