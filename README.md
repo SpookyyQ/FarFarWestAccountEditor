@@ -79,6 +79,21 @@ Weapon and spell fragments may exist but their keys are currently unknown — th
 
 If a fragment already exists naturally in your save, you can edit its amount directly from the Inventory tab.
 
+## Credits & Acknowledgements
+
+This tool is a rewrite of the original **FarFarWest Save Editor** published on Nexus Mods by its original author:
+
+**[FarFarWest Save Editor (Python) — Nexus Mods](https://www.nexusmods.com/farfarwest/mods/5?tab=description)**
+
+The original tool laid the groundwork for understanding the FarFarWest save format and made this project possible. Without that prior work, none of this would exist. A sincere thank-you goes to the original creator for sharing it with the community.
+
+This C++ rewrite was motivated by two recurring issues with the Python version:
+
+- Many users experienced setup problems installing Python and its dependencies before the tool would even run.
+- Several quality-of-life features were missing or impractical to add to the scripted version.
+
+The goal of this rewrite is to give those users a single portable `.exe` that just works, while building on the foundation the original author established.
+
 ## Disclaimer
 
 Use the tool on copies or let the built-in backup system keep a recovery point. Editing save data always carries some risk, especially after game updates that change the file format.
