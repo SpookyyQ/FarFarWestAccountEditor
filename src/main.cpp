@@ -1551,6 +1551,12 @@ static std::wstring UiAssetDir() {
     return ExecutableDir() + L"\\ui";
 }
 
+static std::wstring WebView2UserDataDir() {
+    wchar_t localAppData[MAX_PATH];
+    SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, localAppData);
+    return std::wstring(localAppData) + L"\\FarFarWestUnlockAllTool\\WebView2Data";
+}
+
 static std::wstring HResultMessage(HRESULT hr) {
     LPWSTR buffer = NULL;
     DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
@@ -1876,9 +1882,10 @@ private:
             });
 
         auto* envOptions = new WebView2EnvironmentOptions();
+        std::wstring userDataDir = WebView2UserDataDir();
         HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
             NULL,
-            NULL,
+            userDataDir.c_str(),
             envOptions,
             environmentHandler);
         envOptions->Release();
