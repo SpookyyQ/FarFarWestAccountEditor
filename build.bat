@@ -19,19 +19,11 @@ if defined LLVM_MINGW (
     if exist "%LLVM_MINGW%\bin\clang++.exe" set TOOLCHAIN_ROOT=%LLVM_MINGW%
 )
 
-if not defined TOOLCHAIN_ROOT (
-    for %%P in (
-        "C:\llvm-mingw"
-        "C:\tools\llvm-mingw"
-        "%LOCALAPPDATA%\llvm-mingw"
-        "C:\Program Files\LLVM-MinGW"
-        "C:\Program Files\Windhawk\Compiler"
-    ) do (
-        if not defined TOOLCHAIN_ROOT (
-            if exist "%%~P\bin\clang++.exe" set TOOLCHAIN_ROOT=%%~P
-        )
-    )
-)
+if not defined TOOLCHAIN_ROOT if exist "C:\llvm-mingw\bin\clang++.exe" set TOOLCHAIN_ROOT=C:\llvm-mingw
+if not defined TOOLCHAIN_ROOT if exist "C:\tools\llvm-mingw\bin\clang++.exe" set TOOLCHAIN_ROOT=C:\tools\llvm-mingw
+if not defined TOOLCHAIN_ROOT if exist "%LOCALAPPDATA%\llvm-mingw\bin\clang++.exe" set TOOLCHAIN_ROOT=%LOCALAPPDATA%\llvm-mingw
+if not defined TOOLCHAIN_ROOT if exist "C:\Program Files\LLVM-MinGW\bin\clang++.exe" set TOOLCHAIN_ROOT=C:\Program Files\LLVM-MinGW
+if not defined TOOLCHAIN_ROOT if exist "C:\Program Files\Windhawk\Compiler\bin\clang++.exe" set TOOLCHAIN_ROOT=C:\Program Files\Windhawk\Compiler
 
 if not defined TOOLCHAIN_ROOT (
     echo.
