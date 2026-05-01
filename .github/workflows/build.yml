@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download LLVM-MinGW
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -like "*ucrt-x86_64.zip" } | Select-Object -First 1
+          Write-Host "Downloading $($asset.name)..."
+          Invoke-WebRequest $asset.browser_download_url -OutFile llvm-mingw.zip
+          Expand-Archive llvm-mingw.zip -DestinationPath C:\llvm-mingw-extract
+          $inner = Get-ChildItem C:\llvm-mingw-extract | Select-Object -First 1
+          Move-Item $inner.FullName C:\llvm-mingw
+
+      - name: Build
+        shell: cmd
+        env:
+          LLVM_MINGW: C:\llvm-mingw
+        run: build.bat
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarFarWest-Unlock-all-tool
+          path: |
+            build/*.exe
+            build/*.dll
+            build/ui/
+
+      - name: Package release ZIP
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $appDir = "release\FarFarWest Unlock all tool"
+          New-Item -ItemType Directory -Force -Path $appDir | Out-Null
+          Copy-Item "build\FarFarWest Unlock all tool.exe" $appDir
+          Copy-Item "build\*.dll" $appDir
+          Copy-Item "README_RELEASE.txt" "$appDir\README.txt"
+          Copy-Item "build\ui" $appDir -Recurse
+          Compress-Archive -Path $appDir -DestinationPath "release\FarFarWest-Unlock-all-tool.zip"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/FarFarWest-Unlock-all-tool.zip
