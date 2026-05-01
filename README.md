@@ -75,7 +75,9 @@ Adding fragments via the editor should theoretically be possible since they foll
 
 Weapon and spell fragments may exist but their keys are currently unknown — the game's pak files are encrypted and fragment items only appear in a save once the player has picked one up in-game.
 
-The editor does not add fragment items automatically. However, if a fragment already exists in your save, you can edit its amount directly from the Inventory tab.
+**Manually adding fragments via the editor causes the game to crash on load, even when the key is correct.** This has been tested with confirmed keys and the result is consistent. Adding fragments is therefore likely not possible through save editing at this time.
+
+If a fragment already exists naturally in your save, you can edit its amount directly from the Inventory tab.
 
 ## Disclaimer
 
