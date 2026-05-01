@@ -4,9 +4,11 @@ Portable native Windows save editor for **FarFarWest**.
 
 This project rewrites the earlier tool as a standalone desktop app built with Win32 and WebView2, so end users can open, inspect, edit, and save `.save` files without needing a Python installation.
 
-![FarFarWest Unlock all tool screenshot](docs/images/app-screenshot.svg)
+![App start screen](docs/images/screenshot-app-start.png)
 
-> UI preview based on the current desktop layout.
+![Overview tab with save loaded](docs/images/screenshot-overview-loaded.png)
+
+![In-game result after editing](docs/images/screenshot-ingame-result.png)
 
 ## Highlights
 
