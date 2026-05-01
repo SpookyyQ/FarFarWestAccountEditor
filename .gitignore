@@ -1,4 +1,5 @@
-build/
+/build/
+!third_party_webview2/build/
 dist/
 release/
 *.obj
