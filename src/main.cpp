@@ -1651,6 +1651,58 @@ private:
     std::function<HRESULT(ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*)> callback_;
 };
 
+class WebView2EnvironmentOptions : public ICoreWebView2EnvironmentOptions {
+public:
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override {
+        if (!ppvObject) return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_ICoreWebView2EnvironmentOptions) {
+            *ppvObject = static_cast<ICoreWebView2EnvironmentOptions*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refCount_; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        ULONG count = --refCount_;
+        if (count == 0) delete this;
+        return count;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_AdditionalBrowserArguments(LPWSTR* value) override {
+        return DupCoTaskW(kArgs_, value);
+    }
+    HRESULT STDMETHODCALLTYPE put_AdditionalBrowserArguments(LPCWSTR) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE get_Language(LPWSTR* value) override { return DupCoTaskW(L"", value); }
+    HRESULT STDMETHODCALLTYPE put_Language(LPCWSTR) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE get_TargetCompatibleBrowserVersion(LPWSTR* value) override { return DupCoTaskW(L"", value); }
+    HRESULT STDMETHODCALLTYPE put_TargetCompatibleBrowserVersion(LPCWSTR) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE get_AllowSingleSignOnUsingOSPrimaryAccount(BOOL* allow) override {
+        *allow = FALSE;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_AllowSingleSignOnUsingOSPrimaryAccount(BOOL) override { return S_OK; }
+
+private:
+    static constexpr const wchar_t* kArgs_ =
+        L"--disable-background-networking "
+        L"--disable-client-side-phishing-detection "
+        L"--no-pings "
+        L"--metrics-recording-only "
+        L"--disable-sync";
+
+    static HRESULT DupCoTaskW(const wchar_t* src, LPWSTR* out) {
+        size_t bytes = (wcslen(src) + 1) * sizeof(wchar_t);
+        *out = static_cast<LPWSTR>(CoTaskMemAlloc(bytes));
+        if (!*out) return E_OUTOFMEMORY;
+        memcpy(*out, src, bytes);
+        return S_OK;
+    }
+
+    std::atomic<ULONG> refCount_{ 1 };
+};
+
 class AppWindow {
 public:
     AppWindow() = default;
@@ -1819,11 +1871,13 @@ private:
                 return controllerHr;
             });
 
+        auto* envOptions = new WebView2EnvironmentOptions();
         HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
             NULL,
             NULL,
-            NULL,
+            envOptions,
             environmentHandler);
+        envOptions->Release();
         environmentHandler->Release();
 
         if (FAILED(hr)) {
