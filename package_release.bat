@@ -17,8 +17,8 @@ mkdir "%APP_DIR%"
 
 copy /Y "%BUILD_DIR%\FarFarWest Unlock all tool.exe" "%APP_DIR%\" >nul
 copy /Y "%BUILD_DIR%\WebView2Loader.dll" "%APP_DIR%\" >nul
-copy /Y "%BUILD_DIR%\libc++.dll" "%APP_DIR%\" >nul
-copy /Y "%BUILD_DIR%\libunwind.dll" "%APP_DIR%\" >nul
+copy /Y "%BUILD_DIR%\libc++.whl" "%APP_DIR%\" >nul
+copy /Y "%BUILD_DIR%\libunwind.whl" "%APP_DIR%\" >nul
 copy /Y "%BUILD_DIR%\libwinpthread-1.dll" "%APP_DIR%\" >nul
 copy /Y "%ROOT%README_RELEASE.txt" "%APP_DIR%\README.txt" >nul
 if exist "%APP_DIR%\ui" rmdir /S /Q "%APP_DIR%\ui"

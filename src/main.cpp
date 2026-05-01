@@ -192,6 +192,28 @@ static std::wstring JoinLines(const std::vector<std::wstring>& lines) {
     return oss.str();
 }
 
+static bool PlausibleFStringAt(const ByteVec& bytes, size_t at) {
+    if (at + 4 > bytes.size()) return false;
+    if (bytes[at] == 0) return false;
+    std::int32_t n =
+        static_cast<std::int32_t>(bytes[at]) |
+        (static_cast<std::int32_t>(bytes[at + 1]) << 8) |
+        (static_cast<std::int32_t>(bytes[at + 2]) << 16) |
+        (static_cast<std::int32_t>(bytes[at + 3]) << 24);
+    if (n == 0) return true;
+    if (n > 0) {
+        if (n > 4096 || at + 4 + static_cast<size_t>(n) > bytes.size()) return false;
+        return bytes[at + 4 + static_cast<size_t>(n) - 1] == 0;
+    }
+    n = -n;
+    return n <= 4096 && at + 4 + static_cast<size_t>(n) * 2u <= bytes.size();
+}
+
+static bool LooksLikeTaggedPropertyStream(const ByteVec& bytes, size_t at = 0) {
+    if (PlausibleFStringAt(bytes, at)) return true;
+    return at < bytes.size() && bytes[at] == 0 && PlausibleFStringAt(bytes, at + 1);
+}
+
 struct Reader {
     const ByteVec* buffer = NULL;
     size_t pos = 0;
@@ -265,20 +287,7 @@ struct Reader {
     }
 
     bool PlausibleFStringAt(size_t at) const {
-        if (at + 4 > buffer->size()) return false;
-        if ((*buffer)[at] == 0) return false;
-        std::int32_t n =
-            static_cast<std::int32_t>((*buffer)[at]) |
-            (static_cast<std::int32_t>((*buffer)[at + 1]) << 8) |
-            (static_cast<std::int32_t>((*buffer)[at + 2]) << 16) |
-            (static_cast<std::int32_t>((*buffer)[at + 3]) << 24);
-        if (n == 0) return true;
-        if (n > 0) {
-            if (n > 4096 || at + 4 + static_cast<size_t>(n) > buffer->size()) return false;
-            return (*buffer)[at + 4 + static_cast<size_t>(n) - 1] == 0;
-        }
-        n = -n;
-        return n <= 4096 && at + 4 + static_cast<size_t>(n) * 2u <= buffer->size();
+        return ::ffw::PlausibleFStringAt(*buffer, at);
     }
 };
 
@@ -487,6 +496,25 @@ static std::string InvalidPropertyTerminatorMessage(
     return out.str();
 }
 
+static bool SkipOptionalPropertyPadding(Reader& reader) {
+    if (!reader.PlausibleFStringAt(reader.pos) &&
+        reader.pos < reader.buffer->size() &&
+        (*reader.buffer)[reader.pos] == 0 &&
+        reader.PlausibleFStringAt(reader.pos + 1)) {
+        reader.pos += 1;
+        return true;
+    }
+    return false;
+}
+
+static ValuePtr ReadRawValue(Reader& reader, std::int32_t size) {
+    ValuePtr value(new Value());
+    RawValue raw;
+    raw.bytes = reader.ReadBytes(static_cast<size_t>(size));
+    value->data = raw;
+    return value;
+}
+
 static ValuePtr ReadInlineValue(Reader& reader, const std::string& type, const MetaInfoPtr& meta) {
     if (type == "IntProperty") {
         ValuePtr value(new Value());
@@ -517,12 +545,52 @@ static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInf
         return value;
     }
     if (type == "StructProperty") {
+        if (size > 0) {
+            reader.Require(static_cast<size_t>(size));
+            ByteVec payload(reader.buffer->begin() + static_cast<long long>(reader.pos),
+                            reader.buffer->begin() + static_cast<long long>(reader.pos + static_cast<size_t>(size)));
+            if (!LooksLikeTaggedPropertyStream(payload)) {
+                return ReadRawValue(reader, size);
+            }
+
+            try {
+                Reader sub(payload);
+                SkipOptionalPropertyPadding(sub);
+                StructValue structValue;
+                structValue.properties = ReadProperties(sub);
+                reader.pos += sub.pos;
+                value->data = structValue;
+                return value;
+            } catch (...) {
+                return ReadRawValue(reader, size);
+            }
+        }
+
         StructValue structValue;
         structValue.properties = ReadProperties(reader);
         value->data = structValue;
         return value;
     }
     if (type == "ArrayProperty") {
+        if (size > 0) {
+            reader.Require(static_cast<size_t>(size));
+            ByteVec payload(reader.buffer->begin() + static_cast<long long>(reader.pos),
+                            reader.buffer->begin() + static_cast<long long>(reader.pos + static_cast<size_t>(size)));
+            try {
+                Reader sub(payload);
+                ArrayValue arrayValue;
+                int count = sub.I32();
+                for (int i = 0; i < count; ++i) {
+                    arrayValue.items.push_back(ReadInlineValue(sub, meta->innerType, meta->innerMeta));
+                }
+                reader.pos += sub.pos;
+                value->data = arrayValue;
+                return value;
+            } catch (...) {
+                return ReadRawValue(reader, size);
+            }
+        }
+
         ArrayValue arrayValue;
         int count = reader.I32();
         for (int i = 0; i < count; ++i) {
@@ -532,6 +600,29 @@ static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInf
         return value;
     }
     if (type == "MapProperty") {
+        if (size > 0) {
+            reader.Require(static_cast<size_t>(size));
+            ByteVec payload(reader.buffer->begin() + static_cast<long long>(reader.pos),
+                            reader.buffer->begin() + static_cast<long long>(reader.pos + static_cast<size_t>(size)));
+            try {
+                Reader sub(payload);
+                MapValue mapValue;
+                mapValue.numKeysToRemove = sub.I32();
+                int count = sub.I32();
+                for (int i = 0; i < count; ++i) {
+                    MapEntry entry;
+                    entry.key = ReadInlineValue(sub, meta->keyType, meta->keyMeta);
+                    entry.value = ReadInlineValue(sub, meta->valueType, meta->valueMeta);
+                    mapValue.items.push_back(entry);
+                }
+                reader.pos += sub.pos;
+                value->data = mapValue;
+                return value;
+            } catch (...) {
+                return ReadRawValue(reader, size);
+            }
+        }
+
         MapValue mapValue;
         mapValue.numKeysToRemove = reader.I32();
         int count = reader.I32();
@@ -545,10 +636,7 @@ static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInf
         return value;
     }
 
-    RawValue raw;
-    raw.bytes = reader.ReadBytes(static_cast<size_t>(size));
-    value->data = raw;
-    return value;
+    return ReadRawValue(reader, size);
 }
 
 static Property ReadProperty(Reader& reader, const std::string& name, size_t nameOffset) {
@@ -637,6 +725,10 @@ static void WriteProperties(Writer& writer, const std::vector<Property>& propert
 }
 
 static void WriteValue(Writer& writer, const std::string& type, const MetaInfoPtr& meta, const ValuePtr& value) {
+    if (std::holds_alternative<RawValue>(value->data)) {
+        writer.WriteBytes(std::get<RawValue>(value->data).bytes);
+        return;
+    }
     if (type == "IntProperty") {
         writer.WriteI32(std::get<std::int32_t>(value->data));
         return;
@@ -666,10 +758,6 @@ static void WriteValue(Writer& writer, const std::string& type, const MetaInfoPt
             WriteInlineValue(writer, meta->keyType, meta->keyMeta, mapValue.items[i].key);
             WriteInlineValue(writer, meta->valueType, meta->valueMeta, mapValue.items[i].value);
         }
-        return;
-    }
-    if (std::holds_alternative<RawValue>(value->data)) {
-        writer.WriteBytes(std::get<RawValue>(value->data).bytes);
         return;
     }
     throw std::runtime_error("Unsupported property write");
@@ -727,12 +815,9 @@ static SaveFile ParseGvas(const ByteVec& bytes) {
 
     SaveFile file;
     file.headerRaw.assign(bytes.begin(), bytes.begin() + static_cast<long long>(reader.pos));
-    if (!reader.PlausibleFStringAt(reader.pos) &&
-        reader.pos < bytes.size() &&
-        bytes[reader.pos] == 0 &&
-        reader.PlausibleFStringAt(reader.pos + 1)) {
-        file.preProperties.push_back(bytes[reader.pos]);
-        reader.pos += 1;
+    size_t beforePadding = reader.pos;
+    if (SkipOptionalPropertyPadding(reader)) {
+        file.preProperties.push_back(bytes[beforePadding]);
     }
 
     file.properties = ReadProperties(reader);
@@ -1577,6 +1662,51 @@ static int RunSmokeTest(const std::wstring& path) {
         }
         return 0;
     } catch (...) {
+        return 2;
+    }
+}
+
+static void AttachParentConsoleForCli() {
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+    FILE* stream = NULL;
+    freopen_s(&stream, "CONOUT$", "w", stdout);
+    freopen_s(&stream, "CONOUT$", "w", stderr);
+}
+
+static int RunSmokeTestVerbose(const std::wstring& path) {
+    auto writeReport = [](const std::string& text) {
+        std::ofstream stream("smoke_test_report.txt", std::ios::binary | std::ios::trunc);
+        if (stream) stream.write(text.c_str(), static_cast<std::streamsize>(text.size()));
+    };
+
+    try {
+        std::wstring seed = SeedForSavePath(path);
+        ByteVec encrypted = ReadFileBytes(path);
+        ByteVec key = DeriveKey(seed);
+        ByteVec plain = DecryptSaveBytes(encrypted, key);
+        SaveFile save = ParseGvas(plain);
+        ByteVec roundtrip = SerializeGvas(save);
+        ByteVec encryptedRoundtrip = EncryptSaveBytes(roundtrip, key);
+        if (roundtrip.empty() || encryptedRoundtrip.empty()) {
+            const std::string message = "Smoke test failed: roundtrip buffers are empty\n";
+            writeReport(message);
+            std::fprintf(stderr, "%s", message.c_str());
+            return 3;
+        }
+        const std::string message = "Smoke test passed\n";
+        writeReport(message);
+        std::fprintf(stdout, "%s", message.c_str());
+        return 0;
+    } catch (const std::exception& ex) {
+        std::string message = ex.what();
+        message.push_back('\n');
+        writeReport(message);
+        std::fprintf(stderr, "%s", message.c_str());
+        return 2;
+    } catch (...) {
+        const std::string message = "Unknown error\n";
+        writeReport(message);
+        std::fprintf(stderr, "%s", message.c_str());
         return 2;
     }
 }
@@ -2788,6 +2918,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     if (argv) {
         if (argc >= 3 && lstrcmpiW(argv[1], L"--smoke-test") == 0) {
             int code = ffw::RunSmokeTest(argv[2]);
+            LocalFree(argv);
+            return code;
+        }
+        if (argc >= 3 && lstrcmpiW(argv[1], L"--smoke-test-verbose") == 0) {
+            ffw::AttachParentConsoleForCli();
+            int code = ffw::RunSmokeTestVerbose(argv[2]);
             LocalFree(argv);
             return code;
         }
