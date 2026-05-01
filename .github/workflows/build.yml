@@ -89,9 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.1
+            ## v1.4.2
 
             **What's new:**
+            - Fixed: WebView2 no longer fails to start ("Catastrophic failure" / "can't read to data folder") when the tool is run from a protected or special-character path — user data is now stored in %LOCALAPPDATA%\FarFarWestUnlockAllTool\WebView2Data
             - Fixed: save files containing EnumProperty or ByteProperty fields now load correctly (previously caused "invalid property terminator" error)
             - Fixed: WebView2 background networking disabled — the app no longer makes external connections at startup
 
