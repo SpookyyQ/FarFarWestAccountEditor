@@ -89,9 +89,10 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.7
+            ## v1.4.8
 
             **What's new:**
             - Fix: save files containing blueprint properties with a PropertyGuid tag (e.g. `specialWeaponElement_68_…`) now load correctly instead of failing with `"Invalid property terminator"`. The PropertyGuid bytes are preserved on write so save files round-trip without data loss.
+            - The app version is now shown in the UI header and always reflects the current release.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.
