@@ -134,6 +134,8 @@ function renderButtons() {
 }
 
 function renderAll() {
+  const versionEl = document.querySelector(".brand-version");
+  if (versionEl && state.version) versionEl.textContent = "Version " + state.version;
   tabTitle.textContent = state.currentTabTitle || tabs[state.currentTab];
   rowMetric.textContent = `${state.rowsVisible ?? 0} shown`;
   saveBadge.textContent = state.loaded ? state.saveName : "No save loaded";

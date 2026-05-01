@@ -36,6 +36,7 @@ static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
+static const char* kAppVersion = "1.4.7";
 
 static const wchar_t* kBuildableWeapons[] = {
     L"itemBoomerang",
@@ -2116,6 +2117,7 @@ private:
         std::ostringstream out;
         out << "{";
         out << "\"type\":\"state\",";
+        out << "\"version\":" << JsonString(Utf8ToWide(kAppVersion)) << ",";
         out << "\"loaded\":" << (state_.loaded ? "true" : "false") << ",";
         out << "\"loading\":" << (isLoading_ ? "true" : "false") << ",";
         out << "\"canSave\":" << ((state_.loaded && !isLoading_) ? "true" : "false") << ",";
