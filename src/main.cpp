@@ -37,7 +37,7 @@ static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
-static const char* kAppVersion = "1.4.11";
+static const char* kAppVersion = "1.4.12";
 
 static const wchar_t* kBuildableWeapons[] = {
     L"itemBoomerang",
@@ -1807,6 +1807,7 @@ struct UiRow {
     std::wstring noteText;
     std::wstring typeName;
     std::wstring valueText;
+    std::function<bool(const std::wstring&)> applyEdit;
     bool editable = true;
     bool featured = false;
 };
@@ -2005,6 +2006,12 @@ static Value::Variant ParseEditedScalarValue(const std::wstring& text, const Val
     if (IsDoubleValue(current)) return ParseDoubleText(text);
     if (IsStringValue(current)) return WideToUtf8(text);
     throw InvalidValueError("This field type is not editable.");
+}
+
+static bool ApplyScalarEditToValue(const ValuePtr& value, const std::wstring& text) {
+    if (!value || !IsScalarValue(value)) return false;
+    value->data = ParseEditedScalarValue(text, value);
+    return true;
 }
 
 static Property* FindMapStructPropByKey(SaveFile& save, const std::string& topLevelPrefix, const std::string& itemKey) {
@@ -2778,6 +2785,10 @@ private:
                 row.typeName = PropertyTypeToWide(prop);
                 row.valueText = ValueToWideString(prop.value);
                 row.line = row.selectedText + L" = " + row.valueText;
+                ValuePtr targetValue = prop.value;
+                row.applyEdit = [targetValue](const std::wstring& text) {
+                    return ApplyScalarEditToValue(targetValue, text);
+                };
                 out.push_back(row);
             }
             if (currentTab_ == TAB_OTHER && out.empty()) {
@@ -2810,6 +2821,16 @@ private:
                     row.valueText = std::to_wstring(std::get<std::int32_t>(amountProp->value->data));
                     row.line = row.selectedText + L" = " + row.valueText;
                     row.featured = (itemName == "moneyGold" || itemName == "moneySoul" || itemName == "itemHeroPrestige");
+                    Property* amountTarget = amountProp;
+                    std::string itemKey = itemName;
+                    row.applyEdit = [this, amountTarget, itemKey](const std::wstring& text) {
+                        int value = static_cast<int>(ParseSignedIntegerText(
+                            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+                        amountTarget->value->data = static_cast<std::int32_t>(value);
+                        MapEntry* level = FindChallengeEntry(state_.save, itemKey + "Lvl");
+                        if (level) level->value->data = static_cast<std::int32_t>(LevelFromAmount(value));
+                        return true;
+                    };
                     out.push_back(row);
                 }
             }
@@ -2836,6 +2857,12 @@ private:
                     }
                     row.line = row.selectedText + linked + L" = " + row.valueText;
                     row.featured = (key == "itemHeroLvl");
+                    std::string levelKey = key;
+                    row.applyEdit = [this, levelKey](const std::wstring& text) {
+                        int value = static_cast<int>(ParseSignedIntegerText(
+                            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+                        return SetChallengeValue(state_.save, levelKey, value) != 0;
+                    };
                     out.push_back(row);
                 }
             }
@@ -2861,6 +2888,12 @@ private:
                         row.typeName = L"int";
                         row.valueText = std::to_wstring(std::get<std::int32_t>(tweak.value->data));
                         row.line = row.selectedText + L" = " + row.valueText;
+                        ValuePtr targetValue = tweak.value;
+                        row.applyEdit = [targetValue](const std::wstring& text) {
+                            targetValue->data = static_cast<std::int32_t>(ParseSignedIntegerText(
+                                text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+                            return true;
+                        };
                         out.push_back(row);
                     }
                 }
@@ -2884,6 +2917,10 @@ private:
                             row.typeName = PropertyTypeToWide(prop);
                             row.valueText = ValueToWideString(prop.value);
                             row.line = row.selectedText + L" = " + row.valueText;
+                            ValuePtr targetValue = prop.value;
+                            row.applyEdit = [targetValue](const std::wstring& text) {
+                                return ApplyScalarEditToValue(targetValue, text);
+                            };
                             out.push_back(row);
                         } else {
                             ArrayValue* arr = GetArray(prop);
@@ -2899,6 +2936,10 @@ private:
                                 row.typeName = L"name";
                                 row.valueText = ValueToWideString(arr->items[i]);
                                 row.line = row.selectedText + L" = " + row.valueText;
+                                ValuePtr targetValue = arr->items[i];
+                                row.applyEdit = [targetValue](const std::wstring& text) {
+                                    return ApplyScalarEditToValue(targetValue, text);
+                                };
                                 out.push_back(row);
                             }
                         }
@@ -2920,6 +2961,10 @@ private:
                     row.typeName = L"name";
                     row.valueText = ValueToWideString(arr->items[i]);
                     row.line = row.selectedText + L" = " + row.valueText;
+                    ValuePtr targetValue = arr->items[i];
+                    row.applyEdit = [targetValue](const std::wstring& text) {
+                        return ApplyScalarEditToValue(targetValue, text);
+                    };
                     out.push_back(row);
                 }
             }
@@ -3054,25 +3099,11 @@ private:
     bool ApplyCurrentEdit(const std::wstring& text) {
         UiRow* row = SelectedRow();
         if (!row || !row->editable) return false;
-        std::vector<std::string> parts = SplitId(row->id);
-        if (parts.size() < 2) return false;
-        bool changed = false;
-        if (parts[0] == "overview" || parts[0] == "other") {
-            changed = SetOverviewValue(parts[1], text);
-        } else if (parts[0] == "inventory") {
-            changed = SetInventoryValue(parts[1], text);
-        } else if (parts[0] == "levels") {
-            changed = SetLevelValue(parts[1], text);
-        } else if (parts[0] == "upgrades" && parts.size() == 3) {
-            changed = SetUpgradeValue(parts[1], parts[2], text);
-        } else if (parts[0] == "jokers") {
-            changed = SetJokerValue(parts, text);
-        } else if (parts[0] == "rewards" && parts.size() == 2) {
-            changed = SetRewardValue(parts[1], text);
-        }
+        bool changed = row->applyEdit ? row->applyEdit(text) : false;
         if (changed) {
+            row->valueText = text;
+            row->line = row->selectedText + L" = " + row->valueText;
             state_.status = L"Updated " + row->selectedText + L". Save to write the file.";
-            PopulateList(row->id);
             PublishState();
         }
         return changed;
