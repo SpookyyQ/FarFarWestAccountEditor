@@ -89,11 +89,11 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.12
+            ## v1.4.13
 
             **What's new:**
-            - Fix: applying changes to certain save fields no longer crashes the app during the post-edit UI refresh.
-            - Fix: `Hero Level` edits now apply correctly on save files that previously crashed on `Apply`.
-            - Includes the broader scalar-type editing support and safer value validation from the previous hotfix.
+            - Change: removed the `Unlock Everything` quick-action button from the UI for now.
+            - Reason: this bulk action can still produce broken saves, so it is hidden until a safe implementation is ready.
+            - Existing save editing, import, and targeted quick actions remain available.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.
