@@ -89,12 +89,11 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.10
+            ## v1.4.11
 
             **What's new:**
-            - Fix: save files with unexpected `StructProperty`, `ArrayProperty`, or `MapProperty` layouts now fall back to raw round-trip preservation instead of failing during load with `"Unexpected end of file"`.
-            - Fix: raw-fallback save data is now written back correctly, preventing `bad_variant_access` during round-trip tests and save writes.
-            - Fix: local release packaging now copies the correct runtime filenames for Windhawk-based builds.
-            - The app version shown in the UI now matches this release.
+            - Fix: editing save values now supports additional scalar property types such as `BoolProperty`, `ByteProperty`, `Int64Property`, `UInt32Property`, `UInt64Property`, `FloatProperty`, and `DoubleProperty`.
+            - Fix: invalid Apply inputs now show a validation error instead of crashing the app without feedback.
+            - Fix: joker and reward array editing now skips non-scalar entries that cannot be edited safely.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.

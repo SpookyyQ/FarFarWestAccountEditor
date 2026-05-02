@@ -17,6 +17,7 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -36,7 +37,7 @@ static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
-static const char* kAppVersion = "1.4.10";
+static const char* kAppVersion = "1.4.11";
 
 static const wchar_t* kBuildableWeapons[] = {
     L"itemBoomerang",
@@ -267,6 +268,41 @@ struct Reader {
         return static_cast<std::int64_t>(out);
     }
 
+    std::uint32_t U32() {
+        Require(4);
+        std::uint32_t out =
+            static_cast<std::uint32_t>((*buffer)[pos]) |
+            (static_cast<std::uint32_t>((*buffer)[pos + 1]) << 8) |
+            (static_cast<std::uint32_t>((*buffer)[pos + 2]) << 16) |
+            (static_cast<std::uint32_t>((*buffer)[pos + 3]) << 24);
+        pos += 4;
+        return out;
+    }
+
+    std::uint64_t U64() {
+        Require(8);
+        std::uint64_t out = 0;
+        for (int i = 0; i < 8; ++i) {
+            out |= static_cast<std::uint64_t>((*buffer)[pos + i]) << (8 * i);
+        }
+        pos += 8;
+        return out;
+    }
+
+    float F32() {
+        std::uint32_t raw = U32();
+        float out = 0.0f;
+        memcpy(&out, &raw, sizeof(out));
+        return out;
+    }
+
+    double F64() {
+        std::uint64_t raw = U64();
+        double out = 0.0;
+        memcpy(&out, &raw, sizeof(out));
+        return out;
+    }
+
     std::string FString() {
         std::int32_t n = I32();
         if (n == 0) return "";
@@ -318,6 +354,30 @@ struct Writer {
         for (int i = 0; i < 8; ++i) {
             bytes.push_back(static_cast<unsigned char>((raw >> (8 * i)) & 0xFF));
         }
+    }
+
+    void WriteU32(std::uint32_t value) {
+        for (int i = 0; i < 4; ++i) {
+            bytes.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
+        }
+    }
+
+    void WriteU64(std::uint64_t value) {
+        for (int i = 0; i < 8; ++i) {
+            bytes.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
+        }
+    }
+
+    void WriteF32(float value) {
+        std::uint32_t raw = 0;
+        memcpy(&raw, &value, sizeof(raw));
+        WriteU32(raw);
+    }
+
+    void WriteF64(double value) {
+        std::uint64_t raw = 0;
+        memcpy(&raw, &value, sizeof(raw));
+        WriteU64(raw);
     }
 
     void WriteFString(const std::string& value) {
@@ -391,7 +451,22 @@ struct RawValue {
 };
 
 struct Value {
-    typedef std::variant<std::monostate, std::int32_t, std::string, StructValue, ArrayValue, MapValue, RawValue> Variant;
+    typedef std::variant<
+        std::monostate,
+        bool,
+        std::uint8_t,
+        std::int32_t,
+        std::int64_t,
+        std::uint32_t,
+        std::uint64_t,
+        float,
+        double,
+        std::string,
+        StructValue,
+        ArrayValue,
+        MapValue,
+        RawValue
+    > Variant;
     Variant data;
 };
 
@@ -525,9 +600,44 @@ static ValuePtr ReadRawValue(Reader& reader, std::int32_t size) {
 }
 
 static ValuePtr ReadInlineValue(Reader& reader, const std::string& type, const MetaInfoPtr& meta) {
+    if (type == "BoolProperty") {
+        ValuePtr value(new Value());
+        value->data = (reader.U8() != 0);
+        return value;
+    }
+    if (type == "ByteProperty") {
+        ValuePtr value(new Value());
+        value->data = static_cast<std::uint8_t>(reader.U8());
+        return value;
+    }
     if (type == "IntProperty") {
         ValuePtr value(new Value());
         value->data = reader.I32();
+        return value;
+    }
+    if (type == "Int64Property") {
+        ValuePtr value(new Value());
+        value->data = reader.I64();
+        return value;
+    }
+    if (type == "UInt32Property") {
+        ValuePtr value(new Value());
+        value->data = reader.U32();
+        return value;
+    }
+    if (type == "UInt64Property") {
+        ValuePtr value(new Value());
+        value->data = reader.U64();
+        return value;
+    }
+    if (type == "FloatProperty") {
+        ValuePtr value(new Value());
+        value->data = reader.F32();
+        return value;
+    }
+    if (type == "DoubleProperty") {
+        ValuePtr value(new Value());
+        value->data = reader.F64();
         return value;
     }
     if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
@@ -545,8 +655,40 @@ static std::vector<Property> ReadProperties(Reader& reader);
 
 static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInfoPtr& meta, std::int32_t size) {
     ValuePtr value(new Value());
+    if (type == "BoolProperty") {
+        value->data = (reader.U8() != 0);
+        return value;
+    }
+    if (type == "ByteProperty") {
+        if (size == 1) {
+            value->data = static_cast<std::uint8_t>(reader.U8());
+        } else {
+            value->data = reader.FString();
+        }
+        return value;
+    }
     if (type == "IntProperty") {
         value->data = reader.I32();
+        return value;
+    }
+    if (type == "Int64Property") {
+        value->data = reader.I64();
+        return value;
+    }
+    if (type == "UInt32Property") {
+        value->data = reader.U32();
+        return value;
+    }
+    if (type == "UInt64Property") {
+        value->data = reader.U64();
+        return value;
+    }
+    if (type == "FloatProperty") {
+        value->data = reader.F32();
+        return value;
+    }
+    if (type == "DoubleProperty") {
+        value->data = reader.F64();
         return value;
     }
     if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
@@ -701,8 +843,36 @@ static std::vector<Property> ReadProperties(Reader& reader) {
 
 static void WriteInlineValue(Writer& writer, const std::string& type, const MetaInfoPtr& meta, const ValuePtr& value) {
     (void)meta;
+    if (type == "BoolProperty") {
+        writer.WriteU8(std::get<bool>(value->data) ? 1 : 0);
+        return;
+    }
+    if (type == "ByteProperty") {
+        writer.WriteU8(std::get<std::uint8_t>(value->data));
+        return;
+    }
     if (type == "IntProperty") {
         writer.WriteI32(std::get<std::int32_t>(value->data));
+        return;
+    }
+    if (type == "Int64Property") {
+        writer.WriteI64(std::get<std::int64_t>(value->data));
+        return;
+    }
+    if (type == "UInt32Property") {
+        writer.WriteU32(std::get<std::uint32_t>(value->data));
+        return;
+    }
+    if (type == "UInt64Property") {
+        writer.WriteU64(std::get<std::uint64_t>(value->data));
+        return;
+    }
+    if (type == "FloatProperty") {
+        writer.WriteF32(std::get<float>(value->data));
+        return;
+    }
+    if (type == "DoubleProperty") {
+        writer.WriteF64(std::get<double>(value->data));
         return;
     }
     if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
@@ -738,8 +908,40 @@ static void WriteValue(Writer& writer, const std::string& type, const MetaInfoPt
         writer.WriteBytes(std::get<RawValue>(value->data).bytes);
         return;
     }
+    if (type == "BoolProperty") {
+        writer.WriteU8(std::get<bool>(value->data) ? 1 : 0);
+        return;
+    }
+    if (type == "ByteProperty") {
+        if (std::holds_alternative<std::uint8_t>(value->data)) {
+            writer.WriteU8(std::get<std::uint8_t>(value->data));
+        } else {
+            writer.WriteFString(std::get<std::string>(value->data));
+        }
+        return;
+    }
     if (type == "IntProperty") {
         writer.WriteI32(std::get<std::int32_t>(value->data));
+        return;
+    }
+    if (type == "Int64Property") {
+        writer.WriteI64(std::get<std::int64_t>(value->data));
+        return;
+    }
+    if (type == "UInt32Property") {
+        writer.WriteU32(std::get<std::uint32_t>(value->data));
+        return;
+    }
+    if (type == "UInt64Property") {
+        writer.WriteU64(std::get<std::uint64_t>(value->data));
+        return;
+    }
+    if (type == "FloatProperty") {
+        writer.WriteF32(std::get<float>(value->data));
+        return;
+    }
+    if (type == "DoubleProperty") {
+        writer.WriteF64(std::get<double>(value->data));
         return;
     }
     if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
@@ -1298,8 +1500,22 @@ static Property CloneProperty(const Property& source);
 
 static ValuePtr CloneValue(const ValuePtr& value) {
     ValuePtr copy(new Value());
-    if (std::holds_alternative<std::int32_t>(value->data)) {
+    if (std::holds_alternative<bool>(value->data)) {
+        copy->data = std::get<bool>(value->data);
+    } else if (std::holds_alternative<std::uint8_t>(value->data)) {
+        copy->data = std::get<std::uint8_t>(value->data);
+    } else if (std::holds_alternative<std::int32_t>(value->data)) {
         copy->data = std::get<std::int32_t>(value->data);
+    } else if (std::holds_alternative<std::int64_t>(value->data)) {
+        copy->data = std::get<std::int64_t>(value->data);
+    } else if (std::holds_alternative<std::uint32_t>(value->data)) {
+        copy->data = std::get<std::uint32_t>(value->data);
+    } else if (std::holds_alternative<std::uint64_t>(value->data)) {
+        copy->data = std::get<std::uint64_t>(value->data);
+    } else if (std::holds_alternative<float>(value->data)) {
+        copy->data = std::get<float>(value->data);
+    } else if (std::holds_alternative<double>(value->data)) {
+        copy->data = std::get<double>(value->data);
     } else if (std::holds_alternative<std::string>(value->data)) {
         copy->data = std::get<std::string>(value->data);
     } else if (std::holds_alternative<StructValue>(value->data)) {
@@ -1618,28 +1834,177 @@ static bool IsStringValue(const ValuePtr& value) {
     return std::holds_alternative<std::string>(value->data);
 }
 
+static bool IsBoolValue(const ValuePtr& value) {
+    return std::holds_alternative<bool>(value->data);
+}
+
+static bool IsByteValue(const ValuePtr& value) {
+    return std::holds_alternative<std::uint8_t>(value->data);
+}
+
 static bool IsIntValue(const ValuePtr& value) {
     return std::holds_alternative<std::int32_t>(value->data);
 }
 
+static bool IsInt64Value(const ValuePtr& value) {
+    return std::holds_alternative<std::int64_t>(value->data);
+}
+
+static bool IsUInt32Value(const ValuePtr& value) {
+    return std::holds_alternative<std::uint32_t>(value->data);
+}
+
+static bool IsUInt64Value(const ValuePtr& value) {
+    return std::holds_alternative<std::uint64_t>(value->data);
+}
+
+static bool IsFloatValue(const ValuePtr& value) {
+    return std::holds_alternative<float>(value->data);
+}
+
+static bool IsDoubleValue(const ValuePtr& value) {
+    return std::holds_alternative<double>(value->data);
+}
+
 static bool IsScalarValue(const ValuePtr& value) {
-    return IsStringValue(value) || IsIntValue(value);
+    return IsBoolValue(value) || IsByteValue(value) || IsIntValue(value) || IsInt64Value(value) ||
+           IsUInt32Value(value) || IsUInt64Value(value) || IsFloatValue(value) ||
+           IsDoubleValue(value) || IsStringValue(value);
 }
 
 static std::wstring ValueToWideString(const ValuePtr& value) {
+    if (IsBoolValue(value)) return std::get<bool>(value->data) ? L"true" : L"false";
+    if (IsByteValue(value)) return std::to_wstring(static_cast<unsigned int>(std::get<std::uint8_t>(value->data)));
     if (IsStringValue(value)) return Utf8ToWide(std::get<std::string>(value->data));
     if (IsIntValue(value)) return std::to_wstring(std::get<std::int32_t>(value->data));
+    if (IsInt64Value(value)) return std::to_wstring(std::get<std::int64_t>(value->data));
+    if (IsUInt32Value(value)) return std::to_wstring(std::get<std::uint32_t>(value->data));
+    if (IsUInt64Value(value)) return std::to_wstring(std::get<std::uint64_t>(value->data));
+    if (IsFloatValue(value)) {
+        std::ostringstream out;
+        out << std::setprecision(std::numeric_limits<float>::max_digits10) << std::get<float>(value->data);
+        return Utf8ToWide(out.str());
+    }
+    if (IsDoubleValue(value)) {
+        std::ostringstream out;
+        out << std::setprecision(std::numeric_limits<double>::max_digits10) << std::get<double>(value->data);
+        return Utf8ToWide(out.str());
+    }
     return L"";
 }
 
 static std::wstring PropertyTypeToWide(const Property& property) {
+    if (property.type == "BoolProperty") return L"bool";
+    if (property.type == "ByteProperty") return L"byte";
     if (property.type == "IntProperty") return L"int";
+    if (property.type == "Int64Property") return L"int64";
+    if (property.type == "UInt32Property") return L"uint32";
+    if (property.type == "UInt64Property") return L"uint64";
+    if (property.type == "FloatProperty") return L"float";
+    if (property.type == "DoubleProperty") return L"double";
     if (property.type == "NameProperty") return L"name";
     if (property.type == "ObjectProperty") return L"object";
     if (property.type == "ArrayProperty") return L"array";
     if (property.type == "MapProperty") return L"map";
     if (property.type == "StructProperty") return L"struct";
     return Utf8ToWide(property.type);
+}
+
+static std::runtime_error InvalidValueError(const std::string& message) {
+    return std::runtime_error(message);
+}
+
+static std::wstring TrimmedOrThrow(const std::wstring& text) {
+    std::wstring trimmed = Trim(text);
+    if (trimmed.empty()) throw InvalidValueError("Value must not be empty.");
+    return trimmed;
+}
+
+static std::int64_t ParseSignedIntegerText(const std::wstring& text, std::int64_t minValue, std::int64_t maxValue, const char* label) {
+    std::wstring trimmed = TrimmedOrThrow(text);
+    size_t parsed = 0;
+    long long value = 0;
+    try {
+        value = std::stoll(trimmed, &parsed, 10);
+    } catch (...) {
+        throw InvalidValueError(std::string("Invalid ") + label + " value.");
+    }
+    if (parsed != trimmed.size()) throw InvalidValueError(std::string("Invalid ") + label + " value.");
+    if (value < minValue || value > maxValue) {
+        throw InvalidValueError(std::string(label) + " value is out of range.");
+    }
+    return static_cast<std::int64_t>(value);
+}
+
+static std::uint64_t ParseUnsignedIntegerText(const std::wstring& text, std::uint64_t maxValue, const char* label) {
+    std::wstring trimmed = TrimmedOrThrow(text);
+    size_t parsed = 0;
+    unsigned long long value = 0;
+    try {
+        value = std::stoull(trimmed, &parsed, 10);
+    } catch (...) {
+        throw InvalidValueError(std::string("Invalid ") + label + " value.");
+    }
+    if (parsed != trimmed.size()) throw InvalidValueError(std::string("Invalid ") + label + " value.");
+    if (value > maxValue) throw InvalidValueError(std::string(label) + " value is out of range.");
+    return static_cast<std::uint64_t>(value);
+}
+
+static bool ParseBoolText(const std::wstring& text) {
+    std::wstring normalized = ToLowerWide(TrimmedOrThrow(text));
+    if (normalized == L"1" || normalized == L"true" || normalized == L"yes" || normalized == L"on") return true;
+    if (normalized == L"0" || normalized == L"false" || normalized == L"no" || normalized == L"off") return false;
+    throw InvalidValueError("Boolean values must be true/false or 1/0.");
+}
+
+static float ParseFloatText(const std::wstring& text) {
+    std::wstring trimmed = TrimmedOrThrow(text);
+    size_t parsed = 0;
+    try {
+        float value = std::stof(trimmed, &parsed);
+        if (parsed != trimmed.size()) throw InvalidValueError("Invalid float value.");
+        return value;
+    } catch (const std::runtime_error&) {
+        throw;
+    } catch (...) {
+        throw InvalidValueError("Invalid float value.");
+    }
+}
+
+static double ParseDoubleText(const std::wstring& text) {
+    std::wstring trimmed = TrimmedOrThrow(text);
+    size_t parsed = 0;
+    try {
+        double value = std::stod(trimmed, &parsed);
+        if (parsed != trimmed.size()) throw InvalidValueError("Invalid double value.");
+        return value;
+    } catch (const std::runtime_error&) {
+        throw;
+    } catch (...) {
+        throw InvalidValueError("Invalid double value.");
+    }
+}
+
+static Value::Variant ParseEditedScalarValue(const std::wstring& text, const ValuePtr& current) {
+    if (IsBoolValue(current)) return ParseBoolText(text);
+    if (IsByteValue(current)) return static_cast<std::uint8_t>(ParseUnsignedIntegerText(text, 255, "byte"));
+    if (IsIntValue(current)) {
+        return static_cast<std::int32_t>(ParseSignedIntegerText(
+            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+    }
+    if (IsInt64Value(current)) {
+        return ParseSignedIntegerText(text, std::numeric_limits<std::int64_t>::min(), std::numeric_limits<std::int64_t>::max(), "int64");
+    }
+    if (IsUInt32Value(current)) {
+        return static_cast<std::uint32_t>(ParseUnsignedIntegerText(text, std::numeric_limits<std::uint32_t>::max(), "uint32"));
+    }
+    if (IsUInt64Value(current)) {
+        return ParseUnsignedIntegerText(text, std::numeric_limits<std::uint64_t>::max(), "uint64");
+    }
+    if (IsFloatValue(current)) return ParseFloatText(text);
+    if (IsDoubleValue(current)) return ParseDoubleText(text);
+    if (IsStringValue(current)) return WideToUtf8(text);
+    throw InvalidValueError("This field type is not editable.");
 }
 
 static Property* FindMapStructPropByKey(SaveFile& save, const std::string& topLevelPrefix, const std::string& itemKey) {
@@ -2524,6 +2889,7 @@ private:
                             ArrayValue* arr = GetArray(prop);
                             if (!arr) continue;
                             for (size_t i = 0; i < arr->items.size(); ++i) {
+                                if (!IsScalarValue(arr->items[i])) continue;
                                 UiRow row;
                                 std::ostringstream id;
                                 id << "jokers:" << itemName << ":" << shortName << ":" << i;
@@ -2544,6 +2910,7 @@ private:
             ArrayValue* arr = rewardsProp ? GetArray(*rewardsProp) : NULL;
             if (arr) {
                 for (size_t i = 0; i < arr->items.size(); ++i) {
+                    if (!IsScalarValue(arr->items[i])) continue;
                     UiRow row;
                     std::ostringstream id;
                     id << "rewards:" << i;
@@ -2588,21 +2955,15 @@ private:
         if (!playerProps) return false;
         Property* prop = FindPropertyByPrefix(*playerProps, shortName);
         if (!prop) return false;
-        if (prop->type == "IntProperty") {
-            prop->value->data = static_cast<std::int32_t>(_wtoi(text.c_str()));
-            return true;
-        }
-        if (prop->type == "NameProperty" || prop->type == "ObjectProperty") {
-            prop->value->data = WideToUtf8(text);
-            return true;
-        }
-        return false;
+        prop->value->data = ParseEditedScalarValue(text, prop->value);
+        return true;
     }
 
     bool SetInventoryValue(const std::string& itemName, const std::wstring& text) {
         Property* amountProp = FindInventoryAmountProp(state_.save, itemName);
         if (!amountProp) return false;
-        int value = _wtoi(text.c_str());
+        int value = static_cast<int>(ParseSignedIntegerText(
+            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
         amountProp->value->data = static_cast<std::int32_t>(value);
         MapEntry* level = FindChallengeEntry(state_.save, itemName + "Lvl");
         if (level) level->value->data = static_cast<std::int32_t>(LevelFromAmount(value));
@@ -2610,7 +2971,9 @@ private:
     }
 
     bool SetLevelValue(const std::string& key, const std::wstring& text) {
-        return SetChallengeValue(state_.save, key, _wtoi(text.c_str())) != 0;
+        int value = static_cast<int>(ParseSignedIntegerText(
+            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+        return SetChallengeValue(state_.save, key, value) != 0;
     }
 
     bool SetUpgradeValue(const std::string& itemName, const std::string& upgradeName, const std::wstring& text) {
@@ -2626,7 +2989,8 @@ private:
             if (!tweaks) return false;
             for (MapEntry& tweak : tweaks->items) {
                 if (!IsStringValue(tweak.key) || std::get<std::string>(tweak.key->data) != upgradeName) continue;
-                tweak.value->data = static_cast<std::int32_t>(_wtoi(text.c_str()));
+                tweak.value->data = static_cast<std::int32_t>(ParseSignedIntegerText(
+                    text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
                 return true;
             }
         }
@@ -2644,8 +3008,8 @@ private:
             if (!itemStruct) return false;
             Property* prop = FindPropertyByPrefix(itemStruct->properties, parts[2]);
             if (!prop) return false;
-            if (parts.size() == 3 && IsStringValue(prop->value)) {
-                prop->value->data = WideToUtf8(text);
+            if (parts.size() == 3 && IsScalarValue(prop->value)) {
+                prop->value->data = ParseEditedScalarValue(text, prop->value);
                 return true;
             }
             if (parts.size() == 4) {
@@ -2653,7 +3017,8 @@ private:
                 if (!arr) return false;
                 int index = atoi(parts[3].c_str());
                 if (index < 0 || index >= static_cast<int>(arr->items.size())) return false;
-                arr->items[index]->data = WideToUtf8(text);
+                if (!IsScalarValue(arr->items[index])) return false;
+                arr->items[index]->data = ParseEditedScalarValue(text, arr->items[index]);
                 return true;
             }
         }
@@ -2666,7 +3031,8 @@ private:
         if (!arr) return false;
         int index = atoi(indexText.c_str());
         if (index < 0 || index >= static_cast<int>(arr->items.size())) return false;
-        arr->items[index]->data = WideToUtf8(text);
+        if (!IsScalarValue(arr->items[index])) return false;
+        arr->items[index]->data = ParseEditedScalarValue(text, arr->items[index]);
         return true;
     }
 
@@ -2689,6 +3055,7 @@ private:
         UiRow* row = SelectedRow();
         if (!row || !row->editable) return false;
         std::vector<std::string> parts = SplitId(row->id);
+        if (parts.size() < 2) return false;
         bool changed = false;
         if (parts[0] == "overview" || parts[0] == "other") {
             changed = SetOverviewValue(parts[1], text);
@@ -2801,6 +3168,14 @@ private:
     }
 
     void HandleWebMessage(const std::wstring& message) {
+        try {
+            HandleWebMessageImpl(message);
+        } catch (const std::exception& ex) {
+            MessageBoxA(hwnd_, ex.what(), "Internal error (please report)", MB_ICONERROR);
+        }
+    }
+
+    void HandleWebMessageImpl(const std::wstring& message) {
         if (message == L"ready") {
             webViewReady_ = true;
             RefreshViews();
@@ -2875,7 +3250,17 @@ private:
             return;
         }
         if (StartsWithWide(message, L"apply:")) {
-            ApplyCurrentEdit(UrlDecodeComponent(message.substr(6)));
+            try {
+                if (!ApplyCurrentEdit(UrlDecodeComponent(message.substr(6)))) {
+                    state_.status = L"Could not update the selected value.";
+                    PublishState();
+                }
+            } catch (const std::exception& ex) {
+                std::wstring error = L"Apply failed: " + Utf8ToWide(ex.what());
+                state_.status = error;
+                PublishState();
+                MessageBoxW(hwnd_, error.c_str(), L"Invalid value", MB_ICONWARNING);
+            }
             return;
         }
     }
