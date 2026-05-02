@@ -419,8 +419,11 @@ static MetaInfoPtr ParseMeta(Reader& reader, const std::string& type) {
         reader.I32();
         return meta;
     }
-    if (type == "EnumProperty" || type == "ByteProperty") {
+    if (type == "ByteProperty") {
         meta->innerType = reader.FString();
+        reader.I32();    // enum_path_flag
+        reader.FString(); // enum_path
+        reader.I32();    // enum_tail
         return meta;
     }
     if (type == "ArrayProperty") {
@@ -435,6 +438,12 @@ static MetaInfoPtr ParseMeta(Reader& reader, const std::string& type) {
         meta->valueMeta = ParseMeta(reader, meta->valueType);
         return meta;
     }
+    if (type == "SetProperty") {
+        meta->innerType = reader.FString();
+        meta->innerMeta = ParseMeta(reader, meta->innerType);
+        return meta;
+    }
+    // EnumProperty and all scalar types: just kind, no additional meta
     return meta;
 }
 
@@ -521,7 +530,7 @@ static ValuePtr ReadInlineValue(Reader& reader, const std::string& type, const M
         value->data = reader.I32();
         return value;
     }
-    if (type == "NameProperty" || type == "ObjectProperty") {
+    if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
         ValuePtr value(new Value());
         value->data = reader.FString();
         return value;
@@ -529,7 +538,7 @@ static ValuePtr ReadInlineValue(Reader& reader, const std::string& type, const M
     if (type == "StructProperty") {
         return ReadValue(reader, type, meta, 0);
     }
-    throw std::runtime_error("Unsupported inline property type");
+    throw std::runtime_error("Unsupported inline property type: " + type);
 }
 
 static std::vector<Property> ReadProperties(Reader& reader);
@@ -540,7 +549,7 @@ static ValuePtr ReadValue(Reader& reader, const std::string& type, const MetaInf
         value->data = reader.I32();
         return value;
     }
-    if (type == "NameProperty" || type == "ObjectProperty") {
+    if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
         value->data = reader.FString();
         return value;
     }
@@ -696,7 +705,7 @@ static void WriteInlineValue(Writer& writer, const std::string& type, const Meta
         writer.WriteI32(std::get<std::int32_t>(value->data));
         return;
     }
-    if (type == "NameProperty" || type == "ObjectProperty") {
+    if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
         writer.WriteFString(std::get<std::string>(value->data));
         return;
     }
@@ -704,7 +713,7 @@ static void WriteInlineValue(Writer& writer, const std::string& type, const Meta
         WriteValue(writer, type, meta, value);
         return;
     }
-    throw std::runtime_error("Unsupported inline property write");
+    throw std::runtime_error("Unsupported inline property write: " + type);
 }
 
 static ByteVec WriteValueBytes(const std::string& type, const MetaInfoPtr& meta, const ValuePtr& value, const ByteVec& trailing) {
@@ -733,7 +742,7 @@ static void WriteValue(Writer& writer, const std::string& type, const MetaInfoPt
         writer.WriteI32(std::get<std::int32_t>(value->data));
         return;
     }
-    if (type == "NameProperty" || type == "ObjectProperty") {
+    if (type == "NameProperty" || type == "ObjectProperty" || type == "StrProperty" || type == "EnumProperty") {
         writer.WriteFString(std::get<std::string>(value->data));
         return;
     }
@@ -2355,8 +2364,19 @@ private:
             state_.save = std::move(result->save);
             state_.savePath = result->path;
             state_.loaded = true;
-            state_.status = L"Loaded " + result->path;
             searchText_.clear();
+            if (!PlayerProgressProperties(state_.save)) {
+                state_.status = L"Loaded " + result->path;
+                std::string propNames;
+                for (const auto& p : state_.save.properties) {
+                    if (!propNames.empty()) propNames += ", ";
+                    propNames += p.name;
+                }
+                std::string msg = "The save loaded successfully but contains no 'playerProgress' data — all tabs will be empty.\n\nTop-level properties found: " + (propNames.empty() ? "(none)" : propNames);
+                MessageBoxA(hwnd_, msg.c_str(), "Unsupported save structure", MB_ICONWARNING);
+            } else {
+                state_.status = L"Loaded " + result->path;
+            }
             RefreshViews();
             return;
         }
