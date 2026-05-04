@@ -87,43 +87,7 @@ Weapon and spell fragments may exist but their keys are currently unknown — th
 
 If a fragment already exists naturally in your save, you can edit its amount directly from the Inventory tab.
 
-## Building from Source
 
-The project compiles with **clang++** targeting the MinGW-w64 ABI. No Visual Studio or special IDE is required.
-
-### 1. Get LLVM-MinGW
-
-Download the latest `llvm-mingw` release for Windows from GitHub:
-
-**[https://github.com/mstorsjo/llvm-mingw/releases](https://github.com/mstorsjo/llvm-mingw/releases)**
-
-Download the file ending in `-ucrt-x86_64.zip` and extract it. No installer needed.
-
-### 2. Point the build script at it
-
-Either set the `LLVM_MINGW` environment variable to the folder you extracted:
-
-```bat
-set LLVM_MINGW=C:\llvm-mingw
-build.bat
-```
-
-Or simply extract to one of these paths and `build.bat` will find it automatically:
-
-```
-C:\llvm-mingw
-C:\tools\llvm-mingw
-```
-
-If you have [Windhawk](https://windhawk.net/) installed, `build.bat` will also find its bundled compiler automatically as a fallback — no extra steps needed.
-
-### 3. Build
-
-```bat
-build.bat
-```
-
-Output lands in `build\`. Run `package_release.bat` to produce a distributable ZIP.
 
 ### Dependencies
 
@@ -133,21 +97,6 @@ All dependencies are already included in the repository:
 - **Runtime DLLs** (`libc++.dll`, `libunwind.dll`, `libwinpthread-1.dll`) — copied automatically from your LLVM-MinGW installation into `build\`
 
 End users need the **Microsoft Edge WebView2 Runtime** installed, which is pre-installed on Windows 10 (20H2+) and Windows 11.
-
-## Credits & Acknowledgements
-
-This tool is a rewrite of the original **FarFarWest Save Editor** published on Nexus Mods by its original author:
-
-**[FarFarWest Save Editor (Python) — Nexus Mods](https://www.nexusmods.com/farfarwest/mods/5?tab=description)**
-
-The original tool laid the groundwork for understanding the FarFarWest save format and made this project possible. Without that prior work, none of this would exist. A sincere thank-you goes to the original creator for sharing it with the community.
-
-This C++ rewrite was motivated by two recurring issues with the Python version:
-
-- Many users experienced setup problems installing Python and its dependencies before the tool would even run.
-- Several quality-of-life features were missing or impractical to add to the scripted version.
-
-The goal of this rewrite is to give those users a single portable `.exe` that just works, while building on the foundation the original author established.
 
 ## Disclaimer
 
