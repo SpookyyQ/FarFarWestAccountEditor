@@ -1,5 +1,8 @@
 # FarFarWest Unlock all tool
 
+> [!WARNING]
+> This project is only maintained sporadically. Because **FarFarWest** keeps receiving game updates, the editor may stop working fully or entirely until the save format is investigated and the tool is updated again.
+
 Portable native Windows save editor for **FarFarWest**.
 
 This project rewrites the earlier tool as a standalone desktop app built with Win32 and WebView2, so end users can open, inspect, edit, and save `.save` files without needing a Python installation.
