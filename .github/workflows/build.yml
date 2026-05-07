@@ -89,11 +89,13 @@ jobs:
         with:
           files: release/FarFarWest-Unlock-all-tool.zip
           body: |
-            ## v1.4.13
+            ## v1.4.14
 
             **What's new:**
-            - Change: removed the `Unlock Everything` quick-action button from the UI for now.
-            - Reason: this bulk action can still produce broken saves, so it is hidden until a safe implementation is ready.
-            - Existing save editing, import, and targeted quick actions remain available.
+            - Fix: setting a weapon or spell level above the in-game cap of 100 (e.g. 60 000) could crash the editor with a `0xC0000005` access violation when applying the change — most reliably on items like the Minigun or Sheriff Star.
+            - Cause: the editor mirrors the level into a linked inventory amount as `(level - 1) * 1000 + progress`, so unrealistic levels wrote tens of millions into a property whose underlying type didn't always match, corrupting the save in memory and tripping the next render/serialize step.
+            - Levels tab inputs are now clamped to **1–100**.
+            - Inventory amounts for items linked to a level are clamped to **100 000** (level 100). Money items (Gold, Souls) stay uncapped.
+            - Side panel now shows the allowed range so it is clear before you type.
 
             **Installation:** Download the ZIP, extract it, and run `FarFarWest Unlock all tool.exe`. If WebView2 is missing or damaged, install the Microsoft Edge WebView2 Runtime from Microsoft and start the tool again.
