@@ -37,7 +37,7 @@ static const wchar_t* kWindowClass = L"FarFarWestUnlockAllToolWindow";
 static const wchar_t* kWindowTitle = L"Far Far West Unlock all tool";
 static const wchar_t* kPartySuffix = L"NicoArnoEvilRaptorFireshineRobbo";
 static const int kInt32Max = 2147483647;
-static const char* kAppVersion = "1.4.13";
+static const char* kAppVersion = "1.4.14";
 
 static const wchar_t* kBuildableWeapons[] = {
     L"itemBoomerang",
@@ -2823,9 +2823,16 @@ private:
                     row.featured = (itemName == "moneyGold" || itemName == "moneySoul" || itemName == "itemHeroPrestige");
                     Property* amountTarget = amountProp;
                     std::string itemKey = itemName;
-                    row.applyEdit = [this, amountTarget, itemKey](const std::wstring& text) {
-                        int value = static_cast<int>(ParseSignedIntegerText(
-                            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+                    bool hasLinkedLevel = FindChallengeEntry(state_.save, itemName + "Lvl") != NULL;
+                    if (hasLinkedLevel) {
+                        if (row.noteText.empty()) row.noteText = L"Linked to a level — capped at 100 000 (level 100).";
+                        else row.noteText += L" Capped at 100 000 (level 100).";
+                    }
+                    row.applyEdit = [this, amountTarget, itemKey, hasLinkedLevel](const std::wstring& text) {
+                        std::int64_t maxAllowed = hasLinkedLevel
+                            ? static_cast<std::int64_t>(100) * 1000
+                            : static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max());
+                        int value = static_cast<int>(ParseSignedIntegerText(text, 0, maxAllowed, "amount"));
                         amountTarget->value->data = static_cast<std::int32_t>(value);
                         MapEntry* level = FindChallengeEntry(state_.save, itemKey + "Lvl");
                         if (level) level->value->data = static_cast<std::int32_t>(LevelFromAmount(value));
@@ -2857,10 +2864,11 @@ private:
                     }
                     row.line = row.selectedText + linked + L" = " + row.valueText;
                     row.featured = (key == "itemHeroLvl");
+                    if (row.noteText.empty()) row.noteText = L"Allowed range: 1–100.";
+                    else row.noteText = L"Allowed range: 1–100. " + row.noteText;
                     std::string levelKey = key;
                     row.applyEdit = [this, levelKey](const std::wstring& text) {
-                        int value = static_cast<int>(ParseSignedIntegerText(
-                            text, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max(), "integer"));
+                        int value = static_cast<int>(ParseSignedIntegerText(text, 1, 100, "level"));
                         return SetChallengeValue(state_.save, levelKey, value) != 0;
                     };
                     out.push_back(row);
